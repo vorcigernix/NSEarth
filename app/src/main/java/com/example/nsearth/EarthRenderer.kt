@@ -41,30 +41,35 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             // Sample the cloudless Earth texture
             vec3 textureColor = texture2D(uTexture, texCoordInterp).rgb;
             
-            // Main directional light (sun)
-            vec3 lightDirection = normalize(vec3(0.5, 0.3, 1.0)); // Light from front-right-top
+            // Main directional light (camera-aligned for good visibility)
+            vec3 lightDirection = normalize(vec3(0.2, 0.2, 1.0)); // Light mostly from camera direction
             float NdotL = dot(normalInterp, lightDirection);
             
             // Diffuse lighting with smoother transition
             float diffuse = max(NdotL, 0.0);
             
-            // Ambient lighting (space illumination)
-            float ambient = 0.15;
+            // Additional camera light to ensure visible side is always lit
+            vec3 cameraLight = normalize(vec3(0.0, 0.0, 1.0)); // Direct camera light
+            float cameraLighting = max(dot(normalInterp, cameraLight), 0.0) * 0.4;
+            
+            // Ambient lighting (space illumination) - increased for better visibility
+            float ambient = 0.25;
             
             // Rim lighting for atmosphere effect
             vec3 viewDirection = normalize(vec3(0.0, 0.0, 1.0));
             float rim = 1.0 - max(dot(normalInterp, viewDirection), 0.0);
             rim = pow(rim, 2.0) * 0.3; // Soft atmospheric glow
             
-            // Combine lighting
-            float totalLight = ambient + diffuse + rim;
+            // Combine all lighting components
+            float totalLight = ambient + diffuse + cameraLighting + rim;
             totalLight = min(totalLight, 1.2); // Cap the brightness
             
             vec3 finalColor = textureColor * totalLight;
             
             // Add slight blue tint to shadow areas (atmospheric scattering)
-            if (diffuse < 0.3) {
-                finalColor += vec3(0.05, 0.1, 0.2) * (0.3 - diffuse);
+            float shadowFactor = min(diffuse + cameraLighting, 1.0);
+            if (shadowFactor < 0.4) {
+                finalColor += vec3(0.03, 0.07, 0.15) * (0.4 - shadowFactor);
             }
             
             gl_FragColor = vec4(finalColor, 1.0);
@@ -217,8 +222,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val ratio = width.toFloat() / height
         // Set up a perspective projection matrix
         Matrix.perspectiveM(projectionMatrix, 0, 45f, ratio, 1f, 10f)
-        // Set up a camera/view matrix: eye at (0,0,2), looking at (0,0,0), up (0,1,0) - 3x zoom
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 2f, 0f, 0f, 0f, 0f, 1f, 0f)
+        // Set up a camera/view matrix: eye at (0,0,2.8), looking at (0,0,0), up (0,1,0) - good zoom level
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 2.8f, 0f, 0f, 0f, 0f, 1f, 0f)
         Log.d("NSEarthDebug", "=== Surface changed: ${width}x${height}, ratio=$ratio ===")
         Log.d("NSEarthDebug", "Projection matrix: ${projectionMatrix.take(4)}")
         Log.d("NSEarthDebug", "View matrix: ${viewMatrix.take(4)}")
