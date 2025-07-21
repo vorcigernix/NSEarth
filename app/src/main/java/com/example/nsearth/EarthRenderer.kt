@@ -38,7 +38,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         varying vec2 texCoordInterp;
         uniform sampler2D uTexture;
         void main() {
-            // Sample the texture
+            // Sample the cloudless Earth texture
             vec3 textureColor = texture2D(uTexture, texCoordInterp).rgb;
             
             // Main directional light (sun)
@@ -135,8 +135,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         modelTexCoordBuffer.position(0)
         
         // Load texture
-        textureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
-        Log.d("NSEarthDebug", "Loaded texture ID: $textureId")
+        textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
+        Log.d("NSEarthDebug", "Loaded cloudless texture ID: $textureId")
         
         // Setup model index buffer
         val ib = ByteBuffer.allocateDirect(model.indices.size * 2)
@@ -207,8 +207,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES20.glDisableVertexAttribArray(positionHandle)
         GLES20.glDisableVertexAttribArray(normalHandle)
         GLES20.glDisableVertexAttribArray(texCoordHandle)
-        // Animate (much slower rotation)
-        angle += 0.2f  // Reduced from 1f to 0.2f for slower rotation
+        // Animate (very slow rotation between continents)
+        angle += 0.05f  // Very slow rotation to appreciate continental details
         if (angle > 360f) angle -= 360f
     }
 
@@ -217,8 +217,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val ratio = width.toFloat() / height
         // Set up a perspective projection matrix
         Matrix.perspectiveM(projectionMatrix, 0, 45f, ratio, 1f, 10f)
-        // Set up a camera/view matrix: eye at (0,0,6), looking at (0,0,0), up (0,1,0)
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 6f, 0f, 0f, 0f, 0f, 1f, 0f)
+        // Set up a camera/view matrix: eye at (0,0,2), looking at (0,0,0), up (0,1,0) - 3x zoom
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 2f, 0f, 0f, 0f, 0f, 1f, 0f)
         Log.d("NSEarthDebug", "=== Surface changed: ${width}x${height}, ratio=$ratio ===")
         Log.d("NSEarthDebug", "Projection matrix: ${projectionMatrix.take(4)}")
         Log.d("NSEarthDebug", "View matrix: ${viewMatrix.take(4)}")
