@@ -1,151 +1,160 @@
 package com.example.nsearth
 
+import android.opengl.EGL14
 import android.opengl.GLSurfaceView
 import android.service.wallpaper.WallpaperService
 import android.util.Log
 import android.view.SurfaceHolder
-import kotlinx.coroutines.*
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
-/**
- * Live wallpaper service for 3D Earth OpenGL ES 2.0 rendering
- */
 class EarthWallpaperService : WallpaperService() {
-    
-    companion object {
-        private const val TAG = "EarthWallpaperService"
-    }
-    
+
     override fun onCreateEngine(): Engine {
-        Log.d(TAG, "Creating wallpaper engine")
-        return EarthWallpaperEngine()
+        return EarthEngine()
     }
-    
-    inner class EarthWallpaperEngine : Engine() {
-        
-        private var renderer: EarthRenderer? = null
-        private var glSurfaceView: WallpaperGLSurfaceView? = null
-        private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-        
-        private var isVisible = false
-        
-        override fun onCreate(surfaceHolder: SurfaceHolder?) {
+
+    inner class EarthEngine : Engine(), SurfaceHolder.Callback {
+        private var glThread: GLThread? = null
+        private var renderer: GLSurfaceView.Renderer? = null
+        private val lock = ReentrantLock()
+
+        override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
-            Log.d(TAG, "Engine created")
-            
-            // Create renderer and GLSurfaceView
-            renderer = EarthRenderer(this@EarthWallpaperService)
-            glSurfaceView = WallpaperGLSurfaceView().apply {
-                setEGLContextClientVersion(2)
-                setRenderer(renderer)
-                renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-            }
-            
-            Log.d(TAG, "Wallpaper engine initialized")
+            surfaceHolder.addCallback(this)
         }
-        
+
+        // SurfaceHolder.Callback implementations
+        override fun surfaceCreated(holder: SurfaceHolder) {
+            // Surface created - initializing OpenGL
+            Log.d(TAG, "Surface created")
+            // Use the new EarthRenderer with texture and lighting
+            renderer = EarthRenderer(this@EarthWallpaperService)
+            glThread = GLThread(holder, renderer!!)
+            glThread?.start()
+            glThread?.setRunning(true)
+        }
+
+        override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+            Log.d(TAG, "Surface changed ${width}x$height")
+            glThread?.onWindowResize(width, height)
+        }
+
+        override fun surfaceDestroyed(holder: SurfaceHolder) {
+            Log.d(TAG, "Surface destroyed")
+            glThread?.requestExitAndWait()
+            glThread = null
+        }
+
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
-            Log.d(TAG, "Visibility changed: $visible")
-            
-            isVisible = visible
-            
-            glSurfaceView?.let { view ->
-                if (visible) {
-                    view.onResume()
-                } else {
-                    view.onPause()
-                }
-            }
+            glThread?.setRunning(visible)
         }
-        
-        override fun onSurfaceCreated(holder: SurfaceHolder?) {
-            super.onSurfaceCreated(holder)
-            Log.d(TAG, "Surface created")
-            
-            glSurfaceView?.onWallpaperSurfaceCreated(holder)
-        }
-        
-        override fun onSurfaceChanged(
-            holder: SurfaceHolder?,
-            format: Int,
-            width: Int,
-            height: Int
-        ) {
-            super.onSurfaceChanged(holder, format, width, height)
-            Log.d(TAG, "Surface changed: ${width}x${height}, format: $format")
-            
-            glSurfaceView?.onWallpaperSurfaceChanged(holder, format, width, height)
-        }
-        
-        override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
-            super.onSurfaceDestroyed(holder)
-            Log.d(TAG, "Surface destroyed")
-            
-            glSurfaceView?.onWallpaperSurfaceDestroyed(holder)
-        }
-        
+
         override fun onDestroy() {
-            Log.d(TAG, "Engine destroying")
-            
-            glSurfaceView?.onPause()
-            renderer?.cleanup()
-            
-            // Cancel any ongoing coroutines
-            serviceScope.cancel()
-            
-            glSurfaceView = null
-            renderer = null
-            
             super.onDestroy()
-            Log.d(TAG, "Engine destroyed")
+            glThread?.requestExitAndWait()
+            // cleanup() removed from EarthRenderer minimal version
         }
-        
-        override fun onOffsetsChanged(
-            xOffset: Float,
-            yOffset: Float,
-            xOffsetStep: Float,
-            yOffsetStep: Float,
-            xPixelOffset: Int,
-            yPixelOffset: Int
-        ) {
-            super.onOffsetsChanged(xOffset, yOffset, xOffsetStep, yOffsetStep, xPixelOffset, yPixelOffset)
-            
-            // Optional: Adjust camera or rotation based on home screen scrolling
-            // For now, we'll keep the Earth centered and rotating consistently
-        }
-        
-        /**
-         * Check if the wallpaper is currently active and visible
-         */
-        fun isActiveAndVisible(): Boolean = isVisible
     }
 
-    /**
-     * Custom GLSurfaceView for wallpaper rendering
-     */
-    private inner class WallpaperGLSurfaceView : GLSurfaceView(this@EarthWallpaperService) {
-        
-        private val TAG = "WallpaperGLSurfaceView"
-        private var wallpaperSurfaceHolder: SurfaceHolder? = null
-        
-        override fun getHolder(): SurfaceHolder = wallpaperSurfaceHolder ?: super.getHolder()
-        
-        fun onWallpaperSurfaceCreated(holder: SurfaceHolder?) {
-            Log.d(TAG, "GLSurfaceView surface created")
-            wallpaperSurfaceHolder = holder
-            holder?.let { super.surfaceCreated(it) }
+    /** GL rendering thread directly tied to the wallpaper surface **/
+    private class GLThread(private val holder: SurfaceHolder, private val renderer: GLSurfaceView.Renderer) : Thread() {
+        private val lock = ReentrantLock()
+        private val condition = lock.newCondition()
+        private var running = false
+        private var shouldExit = false
+        private var width = 0
+        private var height = 0
+
+        private var eglDisplay = EGL14.EGL_NO_DISPLAY
+        private var eglContext = EGL14.EGL_NO_CONTEXT
+        private var eglSurface = EGL14.EGL_NO_SURFACE
+
+        fun setRunning(run: Boolean) {
+            lock.withLock {
+                running = run
+                condition.signalAll()
+            }
         }
-        
-        fun onWallpaperSurfaceDestroyed(holder: SurfaceHolder?) {
-            Log.d(TAG, "GLSurfaceView surface destroyed")
-            holder?.let { super.surfaceDestroyed(it) }
-            wallpaperSurfaceHolder = null
+
+        fun onWindowResize(w: Int, h: Int) {
+            lock.withLock {
+                width = w
+                height = h
+            }
         }
-        
-        fun onWallpaperSurfaceChanged(holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
-            Log.d(TAG, "GLSurfaceView surface changed: ${width}x${height}")
-            wallpaperSurfaceHolder = holder
-            holder?.let { super.surfaceChanged(it, format, width, height) }
+
+        fun requestExitAndWait() {
+            lock.withLock {
+                shouldExit = true
+                condition.signalAll()
+            }
+            join()
+        }
+
+        override fun run() {
+            initEGL()
+            renderer.onSurfaceCreated(null, null)
+            renderer.onSurfaceChanged(null, width, height)
+
+            var lastW = -1
+            var lastH = -1
+            while (true) {
+                var exitNow = false
+                var curW:Int
+                var curH:Int
+                lock.withLock {
+                    while (!running && !shouldExit) {
+                        condition.await()
+                    }
+                    if (shouldExit) exitNow = true
+                    curW = width
+                    curH = height
+                }
+                if (exitNow) break
+
+                if (curW != lastW || curH != lastH) {
+                    renderer.onSurfaceChanged(null, curW, curH)
+                    lastW = curW
+                    lastH = curH
+                }
+
+                renderer.onDrawFrame(null)
+                EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                sleep(16)
+            }
+
+            cleanupEGL()
+        }
+
+        private fun initEGL() {
+            eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
+            EGL14.eglInitialize(eglDisplay, null, 0, null, 0)
+            val attrib = intArrayOf(
+                EGL14.EGL_RED_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_NONE)
+            val configs = arrayOfNulls<android.opengl.EGLConfig>(1)
+            val num = IntArray(1)
+            EGL14.eglChooseConfig(eglDisplay, attrib, 0, configs, 0, 1, num, 0)
+            val ctxAttrib = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE)
+            eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT, ctxAttrib,0)
+            val surfAttrib = intArrayOf(EGL14.EGL_NONE)
+            eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, configs[0], holder, surfAttrib,0)
+            EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
+        }
+
+        private fun cleanupEGL() {
+            EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+            EGL14.eglDestroySurface(eglDisplay, eglSurface)
+            EGL14.eglDestroyContext(eglDisplay, eglContext)
+            EGL14.eglTerminate(eglDisplay)
         }
     }
+
+    companion object { private const val TAG = "EarthWallpaperService" }
 } 

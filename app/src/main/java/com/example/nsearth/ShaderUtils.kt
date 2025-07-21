@@ -83,11 +83,12 @@ object ShaderUtils {
         
         if (compileStatus[0] == 0) {
             val error = GLES20.glGetShaderInfoLog(shader)
-            Log.e(TAG, "Shader compilation failed: $error")
+            Log.e(TAG, "Shader compilation failed for type $type: $error")
             GLES20.glDeleteShader(shader)
             return 0
         }
         
+        Log.d(TAG, "Shader compiled successfully for type $type (ID: $shader)")
         return shader
     }
     
@@ -132,7 +133,7 @@ object ShaderUtils {
         GLES20.glDeleteShader(vertexShader)
         GLES20.glDeleteShader(fragmentShader)
         
-        Log.d(TAG, "Successfully created shader program")
+        Log.d(TAG, "Successfully created and linked shader program (ID: $program)")
         return program
     }
     
