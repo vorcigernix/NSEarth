@@ -26,30 +26,38 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         uniform mat4 uMVPMatrix;
         uniform mat4 uModelMatrix;
         uniform mat4 uViewMatrix;
-        varying vec3 normalInterp;
-        varying vec2 texCoordInterp;
+        varying vec3 vNormalView;
+        varying vec2 vTexCoordOut;
         void main() {
             gl_Position = uMVPMatrix * vPosition;
-            // Transform normal to view space
-            normalInterp = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
-            texCoordInterp = vTexCoord;
+            // Transform to view space (like the working normal calculation)
+            vNormalView = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
+            vTexCoordOut = vTexCoord;
         }
     """
 
     private val fragmentShaderCode = """
         precision highp float;
-        varying vec3 normalInterp;
-        varying vec2 texCoordInterp;
+        varying vec3 vNormalView;
+        varying vec2 vTexCoordOut;
         uniform sampler2D uTexture;
         void main() {
-            vec3 textureColor = texture2D(uTexture, texCoordInterp).rgb;
-            vec3 normal = normalize(normalInterp);
-            // Correct "headlight" pointing towards the camera
-            vec3 lightDir = vec3(0.0, 0.0, -1.0);
+            vec3 textureColor = texture2D(uTexture, vTexCoordOut).rgb;
+            vec3 normal = normalize(vNormalView);
+            
+            // Light from the right side
+            vec3 lightDir = normalize(vec3(1.0, 0.0, 0.0));
             float diff = max(dot(normal, lightDir), 0.0);
-            float ambient = 0.3;
-            float totalLight = ambient + diff * 0.7;
-            vec3 finalColor = textureColor * totalLight;
+            float ambient = 0.1;
+            float totalLight = ambient + diff * 0.9;
+            
+            // Rim lighting using fixed view direction
+            vec3 fixedViewDir = vec3(0.0, 0.0, -1.0); // Camera looking down -Z
+            float rim = 1.0 - max(dot(normal, fixedViewDir), 0.0);
+            rim = smoothstep(0.6, 1.0, rim);
+            vec3 rimColor = vec3(0.3, 0.5, 1.0);
+            
+            vec3 finalColor = textureColor * totalLight + rimColor * rim * 0.2;
             gl_FragColor = vec4(finalColor, 1.0);
         }
     """
@@ -164,10 +172,6 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val textureHandle = GLES32.glGetUniformLocation(mProgram, "uTexture")
         GLES32.glUniform1i(textureHandle, 0)
         
-        // Pass time uniform for animations
-        val timeHandle = GLES32.glGetUniformLocation(mProgram, "uTime")
-        GLES32.glUniform1f(timeHandle, time)
-        
         val positionHandle = GLES32.glGetAttribLocation(mProgram, "vPosition")
         GLES32.glEnableVertexAttribArray(positionHandle)
         modelVertexBuffer.position(0)
@@ -183,9 +187,11 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         modelTexCoordBuffer.position(0)
         GLES32.glVertexAttribPointer(texCoordHandle, 2, GLES32.GL_FLOAT, false, 2 * 4, modelTexCoordBuffer)
 
+        // Set uniforms
         val mvpMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uMVPMatrix")
         val modelMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uModelMatrix")
         val viewMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uViewMatrix")
+        
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.rotateM(modelMatrix, 0, angle, 0f, 1f, 0f)
         Matrix.multiplyMM(mvpMatrix, 0, viewMatrix, 0, modelMatrix, 0)
@@ -212,16 +218,15 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // Animate (very slow rotation between continents)
         angle += 0.05f  // Very slow rotation to appreciate continental details
         if (angle > 360f) angle -= 360f
-        time += 0.01f // Increment time for animations
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
         GLES32.glViewport(0, 0, width, height)
         val ratio = width.toFloat() / height
         // Set up a perspective projection matrix
-        Matrix.perspectiveM(projectionMatrix, 0, 45f, ratio, 1f, 10f)
-        // Set up a camera/view matrix: eye at (0,0,7), looking at (0,0,0), up (0,1,0) - zoomed out to see whole globe
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 7f, 0f, 0f, 0f, 0f, 1f, 0f)
+        Matrix.perspectiveM(projectionMatrix, 0, 45f, ratio, 1f, 15f)
+        // Set up a camera/view matrix: eye at (0,0,10), looking at (0,0,0), up (0,1,0) - zoomed out with padding
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 10f, 0f, 0f, 0f, 0f, 1f, 0f)
         Log.d("NSEarthDebug", "=== Surface changed: ${width}x${height}, ratio=$ratio ===")
         Log.d("NSEarthDebug", "Projection matrix: ${projectionMatrix.take(4)}")
         Log.d("NSEarthDebug", "View matrix: ${viewMatrix.take(4)}")
