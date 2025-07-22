@@ -1,7 +1,7 @@
 package com.example.nsearth
 
 import android.content.Context
-import android.opengl.GLES20
+import android.opengl.GLES32
 import android.opengl.GLSurfaceView
 import android.util.Log
 import kotlinx.coroutines.*
@@ -24,54 +24,32 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         attribute vec3 vNormal;
         attribute vec2 vTexCoord;
         uniform mat4 uMVPMatrix;
+        uniform mat4 uModelMatrix;
+        uniform mat4 uViewMatrix;
         varying vec3 normalInterp;
         varying vec2 texCoordInterp;
         void main() {
             gl_Position = uMVPMatrix * vPosition;
-            normalInterp = normalize(vNormal);
+            // Transform normal to view space
+            normalInterp = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
             texCoordInterp = vTexCoord;
         }
     """
+
     private val fragmentShaderCode = """
-        precision mediump float;
+        precision highp float;
         varying vec3 normalInterp;
         varying vec2 texCoordInterp;
         uniform sampler2D uTexture;
         void main() {
-            // Sample the cloudless Earth texture
             vec3 textureColor = texture2D(uTexture, texCoordInterp).rgb;
-            
-            // Main directional light (camera-aligned for good visibility)
-            vec3 lightDirection = normalize(vec3(0.2, 0.2, 1.0)); // Light mostly from camera direction
-            float NdotL = dot(normalInterp, lightDirection);
-            
-            // Diffuse lighting with smoother transition
-            float diffuse = max(NdotL, 0.0);
-            
-            // Additional camera light to ensure visible side is always lit
-            vec3 cameraLight = normalize(vec3(0.0, 0.0, 1.0)); // Direct camera light
-            float cameraLighting = max(dot(normalInterp, cameraLight), 0.0) * 0.4;
-            
-            // Ambient lighting (space illumination) - increased for better visibility
-            float ambient = 0.25;
-            
-            // Rim lighting for atmosphere effect
-            vec3 viewDirection = normalize(vec3(0.0, 0.0, 1.0));
-            float rim = 1.0 - max(dot(normalInterp, viewDirection), 0.0);
-            rim = pow(rim, 2.0) * 0.3; // Soft atmospheric glow
-            
-            // Combine all lighting components
-            float totalLight = ambient + diffuse + cameraLighting + rim;
-            totalLight = min(totalLight, 1.2); // Cap the brightness
-            
+            vec3 normal = normalize(normalInterp);
+            // Correct "headlight" pointing towards the camera
+            vec3 lightDir = vec3(0.0, 0.0, -1.0);
+            float diff = max(dot(normal, lightDir), 0.0);
+            float ambient = 0.3;
+            float totalLight = ambient + diff * 0.7;
             vec3 finalColor = textureColor * totalLight;
-            
-            // Add slight blue tint to shadow areas (atmospheric scattering)
-            float shadowFactor = min(diffuse + cameraLighting, 1.0);
-            if (shadowFactor < 0.4) {
-                finalColor += vec3(0.03, 0.07, 0.15) * (0.4 - shadowFactor);
-            }
-            
             gl_FragColor = vec4(finalColor, 1.0);
         }
     """
@@ -83,6 +61,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private val modelMatrix = FloatArray(16)
     private var angle = 0f
     private var frameCount = 0
+    private var time = 0f
 
     private lateinit var modelVertexBuffer: FloatBuffer
     private lateinit var modelNormalBuffer: FloatBuffer
@@ -93,15 +72,15 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
         Log.d("NSEarthDebug", "=== onSurfaceCreated: EarthRenderer started ===")
-        GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-        GLES20.glDepthFunc(GLES20.GL_LEQUAL)
-        GLES20.glEnable(GLES20.GL_CULL_FACE) // Enable face culling for 3D appearance
-        GLES20.glCullFace(GLES20.GL_BACK)
+        GLES32.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
+        GLES32.glEnable(GLES32.GL_DEPTH_TEST)
+        GLES32.glDepthFunc(GLES32.GL_LEQUAL)
+        GLES32.glEnable(GLES32.GL_CULL_FACE) // Enable face culling for 3D appearance
+        GLES32.glCullFace(GLES32.GL_BACK)
         
         // Enable blending for smoother edges
-        GLES20.glEnable(GLES20.GL_BLEND)
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        GLES32.glEnable(GLES32.GL_BLEND)
+        GLES32.glBlendFunc(GLES32.GL_SRC_ALPHA, GLES32.GL_ONE_MINUS_SRC_ALPHA)
         
         // Generate procedural sphere with higher resolution for smoother appearance
         Log.d("NSEarthDebug", "Generating procedural sphere...")
@@ -152,12 +131,22 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         modelIndexCount = model.indices.size
         
         // Setup shaders
-        val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
-        val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
-        mProgram = GLES20.glCreateProgram().also {
-            GLES20.glAttachShader(it, vertexShader)
-            GLES20.glAttachShader(it, fragmentShader)
-            GLES20.glLinkProgram(it)
+        val vertexShader = loadShader(GLES32.GL_VERTEX_SHADER, vertexShaderCode)
+        val fragmentShader = loadShader(GLES32.GL_FRAGMENT_SHADER, fragmentShaderCode)
+        mProgram = GLES32.glCreateProgram().also {
+            GLES32.glAttachShader(it, vertexShader)
+            GLES32.glAttachShader(it, fragmentShader)
+            GLES32.glLinkProgram(it)
+            
+            // Check for linking errors
+            val linked = IntArray(1)
+            GLES32.glGetProgramiv(it, GLES32.GL_LINK_STATUS, linked, 0)
+            if (linked[0] == 0) {
+                val error = GLES32.glGetProgramInfoLog(it)
+                Log.e("NSEarthDebug", "Program linking error: $error")
+                GLES32.glDeleteProgram(it)
+                throw RuntimeException("Program linking failed: $error")
+            }
         }
         Matrix.setIdentityM(mvpMatrix, 0)
         
@@ -166,36 +155,44 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     override fun onDrawFrame(unused: GL10?) {
         frameCount++
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
-        GLES20.glUseProgram(mProgram)
+        GLES32.glClear(GLES32.GL_COLOR_BUFFER_BIT or GLES32.GL_DEPTH_BUFFER_BIT)
+        GLES32.glUseProgram(mProgram)
         
         // Bind texture
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
-        val textureHandle = GLES20.glGetUniformLocation(mProgram, "uTexture")
-        GLES20.glUniform1i(textureHandle, 0)
+        GLES32.glActiveTexture(GLES32.GL_TEXTURE0)
+        GLES32.glBindTexture(GLES32.GL_TEXTURE_2D, textureId)
+        val textureHandle = GLES32.glGetUniformLocation(mProgram, "uTexture")
+        GLES32.glUniform1i(textureHandle, 0)
         
-        val positionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition")
-        GLES20.glEnableVertexAttribArray(positionHandle)
+        // Pass time uniform for animations
+        val timeHandle = GLES32.glGetUniformLocation(mProgram, "uTime")
+        GLES32.glUniform1f(timeHandle, time)
+        
+        val positionHandle = GLES32.glGetAttribLocation(mProgram, "vPosition")
+        GLES32.glEnableVertexAttribArray(positionHandle)
         modelVertexBuffer.position(0)
-        GLES20.glVertexAttribPointer(positionHandle, 3, GLES20.GL_FLOAT, false, 3 * 4, modelVertexBuffer)
+        GLES32.glVertexAttribPointer(positionHandle, 3, GLES32.GL_FLOAT, false, 3 * 4, modelVertexBuffer)
 
-        val normalHandle = GLES20.glGetAttribLocation(mProgram, "vNormal")
-        GLES20.glEnableVertexAttribArray(normalHandle)
+        val normalHandle = GLES32.glGetAttribLocation(mProgram, "vNormal")
+        GLES32.glEnableVertexAttribArray(normalHandle)
         modelNormalBuffer.position(0)
-        GLES20.glVertexAttribPointer(normalHandle, 3, GLES20.GL_FLOAT, false, 3 * 4, modelNormalBuffer)
+        GLES32.glVertexAttribPointer(normalHandle, 3, GLES32.GL_FLOAT, false, 3 * 4, modelNormalBuffer)
 
-        val texCoordHandle = GLES20.glGetAttribLocation(mProgram, "vTexCoord")
-        GLES20.glEnableVertexAttribArray(texCoordHandle)
+        val texCoordHandle = GLES32.glGetAttribLocation(mProgram, "vTexCoord")
+        GLES32.glEnableVertexAttribArray(texCoordHandle)
         modelTexCoordBuffer.position(0)
-        GLES20.glVertexAttribPointer(texCoordHandle, 2, GLES20.GL_FLOAT, false, 2 * 4, modelTexCoordBuffer)
+        GLES32.glVertexAttribPointer(texCoordHandle, 2, GLES32.GL_FLOAT, false, 2 * 4, modelTexCoordBuffer)
 
-        val mvpMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix")
+        val mvpMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uMVPMatrix")
+        val modelMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uModelMatrix")
+        val viewMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uViewMatrix")
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.rotateM(modelMatrix, 0, angle, 0f, 1f, 0f)
         Matrix.multiplyMM(mvpMatrix, 0, viewMatrix, 0, modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvpMatrix, 0)
-        GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
+        GLES32.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
+        GLES32.glUniformMatrix4fv(modelMatrixHandle, 1, false, modelMatrix, 0)
+        GLES32.glUniformMatrix4fv(viewMatrixHandle, 1, false, viewMatrix, 0)
         modelIndexBuffer.position(0)
         // Debug draw parameters (first frame only)
         if (frameCount == 1) {
@@ -203,36 +200,48 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             Log.d("NSEarthDebug", "Final MVP matrix: ${mvpMatrix.take(4)}")
             Log.d("NSEarthDebug", "Handles: position=$positionHandle, mvp=$mvpMatrixHandle")
         }
-        GLES20.glDrawElements(GLES20.GL_TRIANGLES, modelIndexCount, GLES20.GL_UNSIGNED_SHORT, modelIndexBuffer)
+        GLES32.glDrawElements(GLES32.GL_TRIANGLES, modelIndexCount, GLES32.GL_UNSIGNED_SHORT, modelIndexBuffer)
         // Check for OpenGL errors
-        val error = GLES20.glGetError()
-        if (error != GLES20.GL_NO_ERROR && frameCount % 60 == 0) {
+        val error = GLES32.glGetError()
+        if (error != GLES32.GL_NO_ERROR && frameCount % 60 == 0) {
             Log.e("NSEarthDebug", "OpenGL error after draw: $error")
         }
-        GLES20.glDisableVertexAttribArray(positionHandle)
-        GLES20.glDisableVertexAttribArray(normalHandle)
-        GLES20.glDisableVertexAttribArray(texCoordHandle)
+        GLES32.glDisableVertexAttribArray(positionHandle)
+        GLES32.glDisableVertexAttribArray(normalHandle)
+        GLES32.glDisableVertexAttribArray(texCoordHandle)
         // Animate (very slow rotation between continents)
         angle += 0.05f  // Very slow rotation to appreciate continental details
         if (angle > 360f) angle -= 360f
+        time += 0.01f // Increment time for animations
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
-        GLES20.glViewport(0, 0, width, height)
+        GLES32.glViewport(0, 0, width, height)
         val ratio = width.toFloat() / height
         // Set up a perspective projection matrix
         Matrix.perspectiveM(projectionMatrix, 0, 45f, ratio, 1f, 10f)
-        // Set up a camera/view matrix: eye at (0,0,2.8), looking at (0,0,0), up (0,1,0) - good zoom level
-        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 2.8f, 0f, 0f, 0f, 0f, 1f, 0f)
+        // Set up a camera/view matrix: eye at (0,0,7), looking at (0,0,0), up (0,1,0) - zoomed out to see whole globe
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 7f, 0f, 0f, 0f, 0f, 1f, 0f)
         Log.d("NSEarthDebug", "=== Surface changed: ${width}x${height}, ratio=$ratio ===")
         Log.d("NSEarthDebug", "Projection matrix: ${projectionMatrix.take(4)}")
         Log.d("NSEarthDebug", "View matrix: ${viewMatrix.take(4)}")
     }
 
     fun loadShader(type: Int, shaderCode: String): Int {
-        return GLES20.glCreateShader(type).also { shader ->
-            GLES20.glShaderSource(shader, shaderCode)
-            GLES20.glCompileShader(shader)
+        return GLES32.glCreateShader(type).also { shader ->
+            GLES32.glShaderSource(shader, shaderCode)
+            GLES32.glCompileShader(shader)
+            
+            // Check for compilation errors
+            val compiled = IntArray(1)
+            GLES32.glGetShaderiv(shader, GLES32.GL_COMPILE_STATUS, compiled, 0)
+            if (compiled[0] == 0) {
+                val error = GLES32.glGetShaderInfoLog(shader)
+                Log.e("NSEarthDebug", "Shader compilation error: $error")
+                Log.e("NSEarthDebug", "Shader code: $shaderCode")
+                GLES32.glDeleteShader(shader)
+                throw RuntimeException("Shader compilation failed: $error")
+            }
         }
     }
 } 

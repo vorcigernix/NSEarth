@@ -1,6 +1,6 @@
 package com.example.nsearth
 
-import android.opengl.GLES20
+import android.opengl.GLES32
 import android.opengl.GLSurfaceView
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -30,12 +30,12 @@ class MinimalRenderer : GLSurfaceView.Renderer {
                 gl_FragColor = vec4(0.0, 1.0, 0.2, 1.0);
             }
         """.trimIndent()
-        val vs = compileShader(GLES20.GL_VERTEX_SHADER, vsSource)
-        val fs = compileShader(GLES20.GL_FRAGMENT_SHADER, fsSource)
-        program = GLES20.glCreateProgram()
-        GLES20.glAttachShader(program, vs)
-        GLES20.glAttachShader(program, fs)
-        GLES20.glLinkProgram(program)
+        val vs = compileShader(GLES32.GL_VERTEX_SHADER, vsSource)
+        val fs = compileShader(GLES32.GL_FRAGMENT_SHADER, fsSource)
+        program = GLES32.glCreateProgram()
+        GLES32.glAttachShader(program, vs)
+        GLES32.glAttachShader(program, fs)
+        GLES32.glLinkProgram(program)
         // Setup triangle VBO
         val triangle = floatArrayOf(
             0f, 0.8f, 0f,
@@ -47,34 +47,34 @@ class MinimalRenderer : GLSurfaceView.Renderer {
             .asFloatBuffer()
         buf.put(triangle).position(0)
         val ids = IntArray(1)
-        GLES20.glGenBuffers(1, ids, 0)
+        GLES32.glGenBuffers(1, ids, 0)
         vbo = ids[0]
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo)
-        GLES20.glBufferData(GLES20.GL_ARRAY_BUFFER, triangle.size * 4, buf, GLES20.GL_STATIC_DRAW)
+        GLES32.glBindBuffer(GLES32.GL_ARRAY_BUFFER, vbo)
+        GLES32.glBufferData(GLES32.GL_ARRAY_BUFFER, triangle.size * 4, buf, GLES32.GL_STATIC_DRAW)
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
-        GLES20.glViewport(0, 0, width, height)
+        GLES32.glViewport(0, 0, width, height)
     }
 
     override fun onDrawFrame(gl: GL10?) {
-        GLES20.glClearColor(0f, 0f, 0f, 1f)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
-        GLES20.glUseProgram(program)
-        GLES20.glBindBuffer(GLES20.GL_ARRAY_BUFFER, vbo)
-        val loc = GLES20.glGetAttribLocation(program, "aPos")
+        GLES32.glClearColor(0f, 0f, 0f, 1f)
+        GLES32.glClear(GLES32.GL_COLOR_BUFFER_BIT or GLES32.GL_DEPTH_BUFFER_BIT)
+        GLES32.glUseProgram(program)
+        GLES32.glBindBuffer(GLES32.GL_ARRAY_BUFFER, vbo)
+        val loc = GLES32.glGetAttribLocation(program, "aPos")
         if (loc >= 0) {
-            GLES20.glEnableVertexAttribArray(loc)
-            GLES20.glVertexAttribPointer(loc, 3, GLES20.GL_FLOAT, false, 0, 0)
-            GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 3)
-            GLES20.glDisableVertexAttribArray(loc)
+            GLES32.glEnableVertexAttribArray(loc)
+            GLES32.glVertexAttribPointer(loc, 3, GLES32.GL_FLOAT, false, 0, 0)
+            GLES32.glDrawArrays(GLES32.GL_TRIANGLES, 0, 3)
+            GLES32.glDisableVertexAttribArray(loc)
         }
     }
 
     private fun compileShader(type: Int, source: String): Int {
-        val shader = GLES20.glCreateShader(type)
-        GLES20.glShaderSource(shader, source)
-        GLES20.glCompileShader(shader)
+        val shader = GLES32.glCreateShader(type)
+        GLES32.glShaderSource(shader, source)
+        GLES32.glCompileShader(shader)
         return shader
     }
 } 
