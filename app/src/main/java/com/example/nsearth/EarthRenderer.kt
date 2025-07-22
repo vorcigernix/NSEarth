@@ -41,23 +41,64 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         varying vec3 vNormalView;
         varying vec2 vTexCoordOut;
         uniform sampler2D uTexture;
+        uniform float uTime;
+        
+        // Simple noise function for cloud generation
+        float noise(vec2 coord) {
+            return fract(sin(dot(coord, vec2(12.9898, 78.233))) * 43758.5453);
+        }
+        
+        // Generate cloud pattern
+        float cloudPattern(vec2 uv) {
+            // Create larger, more distinct cloud formations
+            vec2 cloudCoord = uv * 3.0 + vec2(uTime * 0.008, uTime * 0.005);
+            
+            // Create distinct cloud patches
+            float cloud1 = noise(cloudCoord);
+            float cloud2 = noise(cloudCoord * 1.7 + vec2(2.5, 1.3));
+            float cloud3 = noise(cloudCoord * 0.8 + vec2(7.1, 4.2));
+            
+            // Combine in a way that creates distinct patches
+            float cloudMix = cloud1 * cloud2 * cloud3;
+            cloudMix = pow(cloudMix, 0.8); // Increase contrast
+            
+            // Create sharp cloud edges for distinct formations
+            cloudMix = smoothstep(0.15, 0.45, cloudMix);
+            
+            // Add some secondary smaller clouds
+            float smallClouds = noise(cloudCoord * 6.0) * 0.3;
+            smallClouds = smoothstep(0.6, 0.9, smallClouds);
+            
+            return max(cloudMix, smallClouds * 0.5);
+        }
+        
         void main() {
             vec3 textureColor = texture2D(uTexture, vTexCoordOut).rgb;
             vec3 normal = normalize(vNormalView);
             
-            // Light from the right side
-            vec3 lightDir = normalize(vec3(1.0, 0.0, 0.0));
+            // Light from front-right towards the viewer
+            vec3 lightDir = normalize(vec3(0.7, 0.0, -0.7));
             float diff = max(dot(normal, lightDir), 0.0);
             float ambient = 0.1;
             float totalLight = ambient + diff * 0.9;
             
-            // Rim lighting using fixed view direction
-            vec3 fixedViewDir = vec3(0.0, 0.0, -1.0); // Camera looking down -Z
+            // Generate clouds
+            float clouds = cloudPattern(vTexCoordOut);
+            vec3 cloudColor = vec3(1.0, 1.0, 1.0);
+            
+            // Blend with higher opacity for visibility
+            vec3 earthWithClouds = mix(textureColor, cloudColor, clouds * 0.5);
+            
+            // Apply lighting
+            vec3 litEarth = earthWithClouds * totalLight;
+            
+            // Rim lighting
+            vec3 fixedViewDir = vec3(0.0, 0.0, -1.0);
             float rim = 1.0 - max(dot(normal, fixedViewDir), 0.0);
             rim = smoothstep(0.6, 1.0, rim);
             vec3 rimColor = vec3(0.3, 0.5, 1.0);
             
-            vec3 finalColor = textureColor * totalLight + rimColor * rim * 0.2;
+            vec3 finalColor = litEarth + rimColor * rim * 0.2;
             gl_FragColor = vec4(finalColor, 1.0);
         }
     """
@@ -191,6 +232,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val mvpMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uMVPMatrix")
         val modelMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uModelMatrix")
         val viewMatrixHandle = GLES32.glGetUniformLocation(mProgram, "uViewMatrix")
+        val timeHandle = GLES32.glGetUniformLocation(mProgram, "uTime")
         
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.rotateM(modelMatrix, 0, angle, 0f, 1f, 0f)
@@ -199,6 +241,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES32.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
         GLES32.glUniformMatrix4fv(modelMatrixHandle, 1, false, modelMatrix, 0)
         GLES32.glUniformMatrix4fv(viewMatrixHandle, 1, false, viewMatrix, 0)
+        GLES32.glUniform1f(timeHandle, time)
         modelIndexBuffer.position(0)
         // Debug draw parameters (first frame only)
         if (frameCount == 1) {
@@ -218,6 +261,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // Animate (very slow rotation between continents)
         angle += 0.05f  // Very slow rotation to appreciate continental details
         if (angle > 360f) angle -= 360f
+        time += 0.1f // Gentle cloud movement
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
