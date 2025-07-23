@@ -20,7 +20,9 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     
     // Textured sphere shaders with lighting
     private val vertexShaderCode = """
-        attribute vec4 vPosition;
+        #version 100
+        precision highp float;
+        attribute vec3 vPosition;
         attribute vec3 vNormal;
         attribute vec2 vTexCoord;
         uniform mat4 uMVPMatrix;
@@ -28,78 +30,60 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         uniform mat4 uViewMatrix;
         varying vec3 vNormalView;
         varying vec2 vTexCoordOut;
+        varying vec3 vModelPos; // New varying for 3D noise
         void main() {
-            gl_Position = uMVPMatrix * vPosition;
+            gl_Position = uMVPMatrix * vec4(vPosition, 1.0);
             // Transform to view space (like the working normal calculation)
             vNormalView = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
             vTexCoordOut = vTexCoord;
+            vModelPos = (uModelMatrix * vec4(vPosition, 1.0)).xyz; // Pass model position
         }
     """
 
     private val fragmentShaderCode = """
+        #version 100
         precision highp float;
+        uniform sampler2D uTexture;
+        uniform sampler2D uCloudTexture; // New uniform for cloud texture
+        uniform float uTime;
+        uniform mat4 uModelMatrix;
+        uniform mat4 uViewMatrix;
         varying vec3 vNormalView;
         varying vec2 vTexCoordOut;
-        uniform sampler2D uTexture;
-        uniform float uTime;
-        
-        // Simple noise function for cloud generation
-        float noise(vec2 coord) {
-            return fract(sin(dot(coord, vec2(12.9898, 78.233))) * 43758.5453);
-        }
-        
-        // Generate cloud pattern
-        float cloudPattern(vec2 uv) {
-            // Create larger, more distinct cloud formations
-            vec2 cloudCoord = uv * 3.0 + vec2(uTime * 0.008, uTime * 0.005);
-            
-            // Create distinct cloud patches
-            float cloud1 = noise(cloudCoord);
-            float cloud2 = noise(cloudCoord * 1.7 + vec2(2.5, 1.3));
-            float cloud3 = noise(cloudCoord * 0.8 + vec2(7.1, 4.2));
-            
-            // Combine in a way that creates distinct patches
-            float cloudMix = cloud1 * cloud2 * cloud3;
-            cloudMix = pow(cloudMix, 0.8); // Increase contrast
-            
-            // Create sharp cloud edges for distinct formations
-            cloudMix = smoothstep(0.15, 0.45, cloudMix);
-            
-            // Add some secondary smaller clouds
-            float smallClouds = noise(cloudCoord * 6.0) * 0.3;
-            smallClouds = smoothstep(0.6, 0.9, smallClouds);
-            
-            return max(cloudMix, smallClouds * 0.5);
-        }
+        varying vec3 vModelPos;
         
         void main() {
-            vec3 textureColor = texture2D(uTexture, vTexCoordOut).rgb;
+            // Sample base Earth and cloud textures
+            vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
+            vec4 cloudColor = texture2D(uCloudTexture, vTexCoordOut);
+
+            // Use the cloud texture's alpha channel for blending
+            float cloudOpacity = cloudColor.a;
+
+            // Animate cloud movement by offsetting texture coordinates
+            float cloudSpeed = 0.00045; // Increase cloud speed by another 1.5x
+            vec2 cloudTexCoord = vec2(vTexCoordOut.x + uTime * cloudSpeed, vTexCoordOut.y);
+            cloudColor = texture2D(uCloudTexture, cloudTexCoord);
+            cloudOpacity = cloudColor.a;
+
+            // Mix the earth and cloud colors, making clouds slightly more visible
+            vec3 finalColor = mix(earthColor, cloudColor.rgb, cloudOpacity * 0.4);
+
+            // Apply lighting
             vec3 normal = normalize(vNormalView);
-            
-            // Light from front-right towards the viewer
             vec3 lightDir = normalize(vec3(0.7, 0.0, -0.7));
             float diff = max(dot(normal, lightDir), 0.0);
-            float ambient = 0.1;
-            float totalLight = ambient + diff * 0.9;
-            
-            // Generate clouds
-            float clouds = cloudPattern(vTexCoordOut);
-            vec3 cloudColor = vec3(1.0, 1.0, 1.0);
-            
-            // Blend with higher opacity for visibility
-            vec3 earthWithClouds = mix(textureColor, cloudColor, clouds * 0.5);
-            
-            // Apply lighting
-            vec3 litEarth = earthWithClouds * totalLight;
-            
-            // Rim lighting
+            float ambient = 0.2; // Slightly higher ambient for better visibility in shadows
+            float totalLight = ambient + diff * 0.8;
+            vec3 litEarth = finalColor * totalLight;
+
+            // Add atmospheric halo (rim lighting)
             vec3 fixedViewDir = vec3(0.0, 0.0, -1.0);
             float rim = 1.0 - max(dot(normal, fixedViewDir), 0.0);
             rim = smoothstep(0.6, 1.0, rim);
             vec3 rimColor = vec3(0.3, 0.5, 1.0);
-            
-            vec3 finalColor = litEarth + rimColor * rim * 0.2;
-            gl_FragColor = vec4(finalColor, 1.0);
+
+            gl_FragColor = vec4(litEarth + rimColor * rim * 0.2, 1.0);
         }
     """
     
@@ -117,7 +101,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private lateinit var modelTexCoordBuffer: FloatBuffer
     private lateinit var modelIndexBuffer: ShortBuffer
     private var modelIndexCount = 0
-    private var textureId = 0
+    private var textureId: Int = 0
+    private var cloudTextureId: Int = 0
 
     override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
         Log.d("NSEarthDebug", "=== onSurfaceCreated: EarthRenderer started ===")
@@ -169,7 +154,9 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         
         // Load texture
         textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
+        cloudTextureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
         Log.d("NSEarthDebug", "Loaded cloudless texture ID: $textureId")
+        Log.d("NSEarthDebug", "Loaded cloud texture ID: $cloudTextureId")
         
         // Setup model index buffer
         val ib = ByteBuffer.allocateDirect(model.indices.size * 2)
@@ -212,6 +199,12 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES32.glBindTexture(GLES32.GL_TEXTURE_2D, textureId)
         val textureHandle = GLES32.glGetUniformLocation(mProgram, "uTexture")
         GLES32.glUniform1i(textureHandle, 0)
+
+        // Bind the cloud texture to texture unit 1
+        GLES32.glActiveTexture(GLES32.GL_TEXTURE1)
+        GLES32.glBindTexture(GLES32.GL_TEXTURE_2D, cloudTextureId)
+        val cloudTextureHandle = GLES32.glGetUniformLocation(mProgram, "uCloudTexture")
+        GLES32.glUniform1i(cloudTextureHandle, 1)
         
         val positionHandle = GLES32.glGetAttribLocation(mProgram, "vPosition")
         GLES32.glEnableVertexAttribArray(positionHandle)
@@ -259,9 +252,9 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES32.glDisableVertexAttribArray(normalHandle)
         GLES32.glDisableVertexAttribArray(texCoordHandle)
         // Animate (very slow rotation between continents)
-        angle += 0.05f  // Very slow rotation to appreciate continental details
+        angle += 0.00765f  // Increase rotation speed by another 1.5x
         if (angle > 360f) angle -= 360f
-        time += 0.1f // Gentle cloud movement
+        time += 0.1f // Keep time increment for cloud animation
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
