@@ -90,6 +90,22 @@ object MathUtils {
     }
     
     /**
+     * Creates a rotation matrix around X-axis
+     */
+    fun createRotationXMatrix(angleRadians: Float, result: FloatArray) {
+        val cos = cos(angleRadians)
+        val sin = sin(angleRadians)
+
+        result.fill(0f)
+        result[0] = 1f
+        result[5] = cos
+        result[6] = sin
+        result[9] = -sin
+        result[10] = cos
+        result[15] = 1f
+    }
+
+    /**
      * Multiplies two 4x4 matrices: result = a * b
      */
     fun multiplyMatrices(a: FloatArray, b: FloatArray, result: FloatArray) {
@@ -109,6 +125,59 @@ object MathUtils {
      */
     fun toRadians(degrees: Float) = degrees * PI.toFloat() / 180f
     
+    /**
+     * Converts GPS coordinates to Cartesian coordinates on a sphere.
+     * @param latitude Latitude in degrees (-90 to 90)
+     * @param longitude Longitude in degrees (-180 to 180)
+     * @param radius The radius of the sphere
+     * @return FloatArray of size 3 with [x, y, z]
+     */
+    fun gpsToCartesian(latitude: Float, longitude: Float, radius: Float): FloatArray {
+        // Convert degrees to radians
+        val latRad = toRadians(latitude)
+        val lonRad = toRadians(longitude)
+
+        // Convert to spherical coordinates (theta, phi) consistent with SphereGenerator
+        // theta is the polar angle (from North Pole, so 90 - latitude)
+        val theta = PI.toFloat() / 2f - latRad
+
+        // phi is the azimuthal angle. For standard Earth textures:
+        // - longitude 0° (Greenwich) should be at the front center of the texture
+        // - In our sphere, phi=0 points to +X axis, but we want lon=0 to point to -Z axis (front)
+        // - So we need to rotate by -PI/2 to align longitude 0 with -Z axis
+        val phi = lonRad - PI.toFloat() / 2f
+
+        // Spherical to Cartesian conversion from SphereGenerator
+        val x = radius * sin(theta) * cos(phi)
+        val y = radius * cos(theta)
+        val z = radius * sin(theta) * sin(phi)
+        
+        return floatArrayOf(x, y, z)
+    }
+
+    /**
+     * Calculates the cross product of two 3D vectors.
+     */
+    fun crossProduct(a: FloatArray, b: FloatArray): FloatArray {
+        return floatArrayOf(
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]
+        )
+    }
+
+    /**
+     * Normalizes a 3D vector.
+     */
+    fun normalize(v: FloatArray) {
+        val len = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+        if (len != 0f) {
+            v[0] /= len
+            v[1] /= len
+            v[2] /= len
+        }
+    }
+
     /**
      * Creates an identity matrix
      */

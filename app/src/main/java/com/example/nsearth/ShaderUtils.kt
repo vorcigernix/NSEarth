@@ -2,6 +2,8 @@ package com.example.nsearth
 
 import android.opengl.GLES20
 import android.util.Log
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 /**
  * Shader compilation and management utilities
@@ -10,6 +12,23 @@ object ShaderUtils {
     
     private const val TAG = "ShaderUtils"
     
+    fun readShaderFromFile(context: android.content.Context, path: String): String {
+        val builder = StringBuilder()
+        try {
+            val inputStream = context.assets.open(path)
+            val reader = BufferedReader(InputStreamReader(inputStream))
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                builder.append(line).append("\n")
+            }
+            reader.close()
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "Could not read shader file: $path", e)
+            return ""
+        }
+        return builder.toString()
+    }
+
     // Vertex shader for 3D Earth rendering
     const val VERTEX_SHADER_SOURCE = """
         precision mediump float;
