@@ -141,13 +141,12 @@ object MathUtils {
         // theta is the polar angle (from North Pole, so 90 - latitude)
         val theta = PI.toFloat() / 2f - latRad
 
-        // phi is the azimuthal angle. For standard Earth textures:
-        // - longitude 0° (Greenwich) should be at the front center of the texture
-        // - In our sphere, phi=0 points to +X axis, but we want lon=0 to point to -Z axis (front)
-        // - So we need to rotate by -PI/2 to align longitude 0 with -Z axis
-        val phi = lonRad - PI.toFloat() / 2f
+        // phi is the azimuthal angle. The texture map has 0 longitude at its center (u=0.5),
+        // which corresponds to phi=PI in the sphere's coordinates.
+        // To align GPS longitude (where east is positive) with this, we add PI.
+        val phi = lonRad + PI.toFloat()
 
-        // Spherical to Cartesian conversion from SphereGenerator
+        // Spherical to Cartesian conversion
         val x = radius * sin(theta) * cos(phi)
         val y = radius * cos(theta)
         val z = radius * sin(theta) * sin(phi)

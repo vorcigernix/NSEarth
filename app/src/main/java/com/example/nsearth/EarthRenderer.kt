@@ -244,6 +244,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val beaconPositionHandle = GLES32.glGetUniformLocation(mProgram, "u_BeaconPosition")
         
         Matrix.setIdentityM(modelMatrix, 0)
+        Matrix.rotateM(modelMatrix, 0, -90f, 0f, 1f, 0f) // Initial rotation to align texture
         Matrix.rotateM(modelMatrix, 0, angle, 0f, 1f, 0f)
         Matrix.multiplyMM(mvpMatrix, 0, viewMatrix, 0, modelMatrix, 0)
         Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, mvpMatrix, 0)
@@ -252,8 +253,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GLES32.glUniformMatrix4fv(viewMatrixHandle, 1, false, viewMatrix, 0)
         GLES32.glUniform1f(timeHandle, time)
 
-        val beaconLat = 1.3349488642364467f
-        val beaconLon = 103.59096174228651f
+        val beaconLat = 1.334959590111953f
+        val beaconLon = 103.59103684447145f
         val earthRadius = 1.5f
         val beaconPosition = MathUtils.gpsToCartesian(beaconLat, beaconLon, earthRadius)
         
@@ -320,8 +321,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     private fun drawBeacon() {
-        val beaconLat = 1.3349488642364467f
-        val beaconLon = 103.59096174228651f
+        val beaconLat = 1.334959590111953f
+        val beaconLon = 103.59103684447145f
         val earthRadius = 1.5f
 
         // Get beacon position in local coordinates
