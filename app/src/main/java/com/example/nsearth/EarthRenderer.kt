@@ -33,16 +33,18 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         varying vec3 vNormalView;
         varying vec2 vTexCoordOut;
         varying vec3 vModelPos; // New varying for 3D noise
+        varying vec3 v_ViewPosition; // Vertex position in view space
         uniform vec3 u_BeaconPosition;
         varying vec3 v_BeaconDirection;
 
         void main() {
+            vec4 modelPosition = uModelMatrix * vec4(vPosition, 1.0);
+            v_ViewPosition = (uViewMatrix * modelPosition).xyz;
             gl_Position = uMVPMatrix * vec4(vPosition, 1.0);
-            // Transform to view space (like the working normal calculation)
+            
             vNormalView = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
             vTexCoordOut = vTexCoord;
-            vModelPos = (uModelMatrix * vec4(vPosition, 1.0)).xyz; // Pass model position
-            // Use beacon position directly since it's already rotated on CPU side
+            vModelPos = modelPosition.xyz;
             v_BeaconDirection = u_BeaconPosition - vModelPos;
         }
     """
@@ -58,36 +60,31 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         varying vec3 vNormalView;
         varying vec2 vTexCoordOut;
         varying vec3 vModelPos;
+        varying vec3 v_ViewPosition; // Vertex position in view space
         uniform vec3 u_BeaconPosition;
         varying vec3 v_BeaconDirection;
         
         void main() {
             // Sample base Earth and cloud textures
             vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
-            // vec4 cloudColor = texture2D(uCloudTexture, vTexCoordOut);
-            // float cloudOpacity = cloudColor.a;
-
-            // Mix the earth and cloud colors, making clouds slightly more visible
-            // vec3 finalColor = mix(earthColor, cloudColor.rgb, cloudOpacity * 0.4);
-            vec3 finalColor = earthColor; // Use only earth color for debugging
+            vec3 finalColor = earthColor;
 
             // Additive glow from beacon
             float beaconDistance = length(v_BeaconDirection);
             float beaconGlow = smoothstep(0.05, 0.0, beaconDistance); // 10x smaller highlight area
             finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 2.0;
 
-
             // Apply lighting
             vec3 normal = normalize(vNormalView);
             vec3 lightDir = normalize(vec3(0.7, 0.0, -0.7));
             float diff = max(dot(normal, lightDir), 0.0);
-            float ambient = 0.24; // Increased from 0.2 to 0.24 for 20% lighter surface
-            float totalLight = ambient + diff * 0.8;
+            float ambient = 0.8; // Increased from 0.4 for significant brightness
+            float totalLight = ambient + diff * 1.2; // Increased from 1.0
             vec3 litEarth = finalColor * totalLight;
 
             // Add atmospheric halo (rim lighting)
-            vec3 fixedViewDir = vec3(0.0, 0.0, -1.0);
-            float rim = 1.0 - max(dot(normal, fixedViewDir), 0.0);
+            vec3 viewDir = normalize(-v_ViewPosition);
+            float rim = 1.0 - max(dot(normal, viewDir), 0.0);
             rim = smoothstep(0.6, 1.0, rim);
             vec3 rimColor = vec3(0.3, 0.5, 1.0);
 
@@ -118,7 +115,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         Log.d("NSEarthDebug", "=== onSurfaceCreated: EarthRenderer started ===")
         GLES32.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
         GLES32.glEnable(GLES32.GL_DEPTH_TEST)
-        GLES32.glDepthFunc(GLES32.GL_LEQUAL)
+        GLES32.glDepthFunc(GLES32.GL_LESS)
         GLES32.glEnable(GLES32.GL_CULL_FACE) // Enable face culling for 3D appearance
         GLES32.glCullFace(GLES32.GL_BACK)
         
@@ -266,6 +263,8 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // Debug logging every 120 frames (every 2 seconds at 60fps)
         if (frameCount % 120 == 1) {
             Log.d("BeaconDebug", "Beacon at: [${rotatedBeaconPosition[0]}, ${rotatedBeaconPosition[1]}, ${rotatedBeaconPosition[2]}], angle=$angle")
+            Log.d("BeaconDebug", "3D Beacon local pos: [${beaconPosition[0]}, ${beaconPosition[1]}, ${beaconPosition[2]}]")
+            Log.d("BeaconDebug", "Surface glow uses same rotatedBeaconPosition, 3D beacon uses beaconPosition")
         }
         
         // Pass the already-rotated beacon position to avoid double transformation in shader
@@ -325,44 +324,44 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val beaconLon = 103.59103684447145f
         val earthRadius = 1.5f
 
-        // Get beacon position in local coordinates
+        // 1. Get beacon's base position in model space
         val beaconPosition = MathUtils.gpsToCartesian(beaconLat, beaconLon, earthRadius)
 
-        // Create orientation matrix to point beacon outward from Earth center
-        val up = floatArrayOf(beaconPosition[0], beaconPosition[1], beaconPosition[2])
+        // 2. Create the beacon's transformation matrix
+        val beaconModelMatrix = FloatArray(16)
+        Matrix.setIdentityM(beaconModelMatrix, 0)
+
+        // 3. Orient the beacon to point "up" from the sphere's surface
+        val up = beaconPosition.clone()
         MathUtils.normalize(up)
-        
-        val arbitraryVector = floatArrayOf(0f, 1f, 0f)
+        val arbitraryVector = if (up[1] > 0.99f || up[1] < -0.99f) floatArrayOf(1f, 0f, 0f) else floatArrayOf(0f, 1f, 0f)
         val right = MathUtils.crossProduct(up, arbitraryVector)
         MathUtils.normalize(right)
-
         val forward = MathUtils.crossProduct(right, up)
         MathUtils.normalize(forward)
         
-        // Create beacon's local transformation matrix
-        val beaconLocalMatrix = FloatArray(16)
-        Matrix.setIdentityM(beaconLocalMatrix, 0)
-        
-        // Set orientation (right=X, up=Y, forward=Z)
-        beaconLocalMatrix[0] = right[0]; beaconLocalMatrix[4] = up[0];    beaconLocalMatrix[8] = forward[0];
-        beaconLocalMatrix[1] = right[1]; beaconLocalMatrix[5] = up[1];    beaconLocalMatrix[9] = forward[1];
-        beaconLocalMatrix[2] = right[2]; beaconLocalMatrix[6] = up[2];    beaconLocalMatrix[10] = forward[2];
-        
-        // Set position
-        beaconLocalMatrix[12] = beaconPosition[0]
-        beaconLocalMatrix[13] = beaconPosition[1]
-        beaconLocalMatrix[14] = beaconPosition[2]
+        val orientationMatrix = FloatArray(16)
+        Matrix.setIdentityM(orientationMatrix, 0)
+        orientationMatrix[0] = right[0]; orientationMatrix[4] = up[0];    orientationMatrix[8] = forward[0];
+        orientationMatrix[1] = right[1]; orientationMatrix[5] = up[1];    orientationMatrix[9] = forward[1];
+        orientationMatrix[2] = right[2]; orientationMatrix[6] = up[2];    orientationMatrix[10] = forward[2];
 
-        // Apply the SAME rotation as the Earth - use the same modelMatrix
+        // 4. Translate the beacon to its position on the sphere
+        Matrix.translateM(beaconModelMatrix, 0, beaconPosition[0], beaconPosition[1], beaconPosition[2])
+        Matrix.multiplyMM(beaconModelMatrix, 0, beaconModelMatrix, 0, orientationMatrix, 0)
+
+        // 5. Apply the same rotation as the Earth
         val finalBeaconMatrix = FloatArray(16)
-        Matrix.multiplyMM(finalBeaconMatrix, 0, modelMatrix, 0, beaconLocalMatrix, 0)
+        Matrix.multiplyMM(finalBeaconMatrix, 0, modelMatrix, 0, beaconModelMatrix, 0)
 
-        // Create MVP matrix for beacon using same view and projection as Earth
+        // 6. Create MVP matrix and draw
         val beaconMvpMatrix = FloatArray(16)
         Matrix.multiplyMM(beaconMvpMatrix, 0, viewMatrix, 0, finalBeaconMatrix, 0)
         Matrix.multiplyMM(beaconMvpMatrix, 0, projectionMatrix, 0, beaconMvpMatrix, 0)
         
         val lightDirection = floatArrayOf(0.7f, 0.0f, -0.7f)
+        
+        // With all underlying issues fixed, the standard depth test will now work correctly.
         beaconRenderer.draw(beaconMvpMatrix, finalBeaconMatrix, lightDirection)
     }
 } 

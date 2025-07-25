@@ -44,11 +44,6 @@ class BeaconRenderer(private val context: Context) {
     fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray) {
         GLES20.glUseProgram(program)
 
-        // Explicitly ensure depth testing is enabled and depth writing is on
-        GLES20.glEnable(GLES20.GL_DEPTH_TEST)
-        GLES20.glDepthFunc(GLES20.GL_LEQUAL)
-        GLES20.glDepthMask(true) // Ensure depth writing is enabled
-
         val positionHandle = GLES20.glGetAttribLocation(program, "a_Position")
         GLES20.glEnableVertexAttribArray(positionHandle)
         GLES20.glVertexAttribPointer(

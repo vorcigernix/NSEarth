@@ -31,9 +31,9 @@ object BeaconGenerator {
             normals.addAll(listOf(normal[0] / len, normal[1] / len, normal[2] / len))
         }
 
-        // Indices for the cone sides
+        // Indices for the cone sides, wound for outward-facing normals
         for (i in 1..segments) {
-            indices.addAll(listOf(0, i, i + 1))
+            indices.addAll(listOf(0, i + 1, i))
         }
 
         return ModelLoader.Model(

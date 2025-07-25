@@ -61,9 +61,9 @@ object SphereGenerator {
                 val idx2 = (ring + 1) * stride + segment
                 val idx3 = (ring + 1) * stride + segment + 1
                 
-                // Two triangles per quad
-                indices.addAll(listOf(idx0, idx2, idx1))
-                indices.addAll(listOf(idx1, idx2, idx3))
+                // Two triangles per quad, wound for outward-facing normals
+                indices.addAll(listOf(idx0, idx1, idx2))
+                indices.addAll(listOf(idx1, idx3, idx2))
             }
         }
         
