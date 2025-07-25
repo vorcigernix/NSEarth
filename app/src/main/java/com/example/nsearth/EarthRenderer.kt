@@ -74,16 +74,20 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             float beaconGlow = smoothstep(0.05, 0.0, beaconDistance); // 10x smaller highlight area
             finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 2.0;
 
-            // Apply lighting
+            // Apply lighting using the view direction as the primary light source ("headlight")
             vec3 normal = normalize(vNormalView);
-            vec3 lightDir = normalize(vec3(0.7, 0.0, -0.7));
-            float diff = max(dot(normal, lightDir), 0.0);
-            float ambient = 0.8; // Increased from 0.4 for significant brightness
-            float totalLight = ambient + diff * 1.2; // Increased from 1.0
-            vec3 litEarth = finalColor * totalLight;
+            vec3 viewDir = normalize(-v_ViewPosition); // Direction from surface to camera
+            
+            // Ambient component provides a soft, global light
+            float ambient = 0.2;
+            
+            // Diffuse component is based on the view angle
+            float diff = max(dot(normal, viewDir), 0.0);
+            
+            // Combine for final lighting
+            vec3 litEarth = finalColor * (ambient + diff);
 
             // Add atmospheric halo (rim lighting)
-            vec3 viewDir = normalize(-v_ViewPosition);
             float rim = 1.0 - max(dot(normal, viewDir), 0.0);
             rim = smoothstep(0.6, 1.0, rim);
             vec3 rimColor = vec3(0.3, 0.5, 1.0);
