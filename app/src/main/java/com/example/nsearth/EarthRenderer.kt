@@ -69,10 +69,10 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
             vec3 finalColor = earthColor;
 
-            // Additive glow from beacon
+            // Additive glow from beacon, smaller and more subtle
             float beaconDistance = length(v_BeaconDirection);
-            float beaconGlow = smoothstep(0.05, 0.0, beaconDistance); // 10x smaller highlight area
-            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 2.0;
+            float beaconGlow = smoothstep(0.2, 0.0, beaconDistance); // Smaller falloff
+            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 0.8; // Reduced intensity
 
             // Apply lighting using the view direction as the primary light source ("headlight")
             vec3 normal = normalize(vNormalView);
@@ -101,7 +101,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private val projectionMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
     private val modelMatrix = FloatArray(16)
-    private var angle = 0f
+    private var angle = 150f // Start with the beacon on the left side of the screen
     private var frameCount = 0
     private var time = 0f
 
@@ -204,9 +204,9 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     override fun onDrawFrame(unused: GL10?) {
         frameCount++
         // Increment angle and time at the beginning
-        angle += 0.5f  // Restore rotation speed for debugging
+        angle += 0.1f
         if (angle > 360f) angle -= 360f
-        time += 0.1f // Keep time increment for cloud animation
+        time += 0.02f
         GLES32.glClear(GLES32.GL_COLOR_BUFFER_BIT or GLES32.GL_DEPTH_BUFFER_BIT)
         GLES32.glUseProgram(mProgram)
         
@@ -365,7 +365,14 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         
         val lightDirection = floatArrayOf(0.7f, 0.0f, -0.7f)
         
+        // Set up additive blending for a glowing effect
+        GLES32.glEnable(GLES32.GL_BLEND)
+        GLES32.glBlendFunc(GLES32.GL_SRC_ALPHA, GLES32.GL_ONE)
+        
         // With all underlying issues fixed, the standard depth test will now work correctly.
-        beaconRenderer.draw(beaconMvpMatrix, finalBeaconMatrix, lightDirection)
+        beaconRenderer.draw(beaconMvpMatrix, finalBeaconMatrix, lightDirection, time)
+        
+        // Restore the original blending mode
+        GLES32.glBlendFunc(GLES32.GL_SRC_ALPHA, GLES32.GL_ONE_MINUS_SRC_ALPHA)
     }
 } 

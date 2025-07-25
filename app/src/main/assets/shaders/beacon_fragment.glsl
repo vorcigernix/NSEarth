@@ -1,10 +1,35 @@
 precision mediump float;
-varying float v_Y;
-varying float v_LightIntensity;
+
+uniform float u_Time;
+varying float v_Y; // The y-coordinate of the vertex, from 0 (base) to height (apex)
 
 void main() {
-    float intensity = 1.0 - v_Y / 0.5; // 0.5 is the height of the beacon
-    // Make beacon much brighter and more self-illuminated
-    vec3 color = vec3(1.0, 1.0, 0.0) * (0.8 + v_LightIntensity * 0.2); // Mostly self-lit
-    gl_FragColor = vec4(color * 2.0, intensity); // Double the brightness
-} 
+    // Normalize y to be in the 0.0 to 1.0 range
+    float normalizedY = v_Y / 0.5; // 0.5 is the height of the beacon
+
+    // --- Pulse Animation ---
+    // Create a subtle pulsing effect using a sine wave based on time
+    float pulse = 1.0 + 0.1 * sin(u_Time * 3.0);
+
+    // --- Core of the Beacon ---
+    // Create a bright, sharp core that is strongest at the center and fades out
+    float coreIntensity = 1.0 - normalizedY;
+    coreIntensity = pow(coreIntensity, 10.0) * pulse; // Use pow for a sharper falloff
+
+    // --- Outer Glow ---
+    // Create a softer, wider glow that fades more gently
+    float glowIntensity = 1.0 - normalizedY;
+    glowIntensity = pow(glowIntensity, 3.0) * 0.5 * pulse; // Softer falloff
+
+    // --- Color ---
+    // Use a vibrant yellow/white color for the beacon
+    vec3 beaconColor = vec3(1.0, 1.0, 0.8);
+
+    // --- Combine and Set Final Color ---
+    // The final color is the core + glow. The alpha controls the transparency.
+    // The additive blending will make the colors stack and appear to glow.
+    vec3 finalColor = beaconColor * coreIntensity + beaconColor * glowIntensity;
+    float alpha = coreIntensity + glowIntensity;
+
+    gl_FragColor = vec4(finalColor, alpha);
+}

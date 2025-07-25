@@ -15,6 +15,7 @@ class BeaconRenderer(private val context: Context) {
     private var indexCount: Int = 0
 
     private var program: Int = 0
+    private var timeHandle: Int = 0
 
     private val beaconModel: ModelLoader.Model = BeaconGenerator.createBeacon(0.01f, 0.5f, 16)
 
@@ -22,6 +23,7 @@ class BeaconRenderer(private val context: Context) {
         val vertexShaderSource = ShaderUtils.readShaderFromFile(context, "shaders/beacon_vertex.glsl")
         val fragmentShaderSource = ShaderUtils.readShaderFromFile(context, "shaders/beacon_fragment.glsl")
         program = ShaderUtils.createProgram(vertexShaderSource, fragmentShaderSource)
+        timeHandle = GLES20.glGetUniformLocation(program, "u_Time")
         loadBeaconModel()
     }
 
@@ -41,7 +43,7 @@ class BeaconRenderer(private val context: Context) {
             .put(beaconModel.indices).position(0) as ShortBuffer
     }
 
-    fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray) {
+    fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray, time: Float) {
         GLES20.glUseProgram(program)
 
         val positionHandle = GLES20.glGetAttribLocation(program, "a_Position")
@@ -64,6 +66,8 @@ class BeaconRenderer(private val context: Context) {
 
         val lightDirectionHandle = GLES20.glGetUniformLocation(program, "u_LightDirection")
         GLES20.glUniform3fv(lightDirectionHandle, 1, lightDirection, 0)
+
+        GLES20.glUniform1f(timeHandle, time)
 
         GLES20.glDrawElements(
             GLES20.GL_TRIANGLES,
