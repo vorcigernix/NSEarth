@@ -69,10 +69,10 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
             vec3 finalColor = earthColor;
 
-            // Additive glow from beacon, smaller and more subtle
+            // Additive glow from beacon, with a more pronounced gradient
             float beaconDistance = length(v_BeaconDirection);
-            float beaconGlow = smoothstep(0.2, 0.0, beaconDistance); // Smaller falloff
-            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 0.8; // Reduced intensity
+            float beaconGlow = smoothstep(0.15, 0.0, beaconDistance); // Sharper falloff
+            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 1.2; // Brighter center
 
             // Apply lighting using the view direction as the primary light source ("headlight")
             vec3 normal = normalize(vNormalView);
@@ -101,7 +101,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private val projectionMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
     private val modelMatrix = FloatArray(16)
-    private var angle = 150f // Start with the beacon on the left side of the screen
+    private var angle = 220f // Start with the beacon on the left side of the screen
     private var frameCount = 0
     private var time = 0f
 
