@@ -10,7 +10,6 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.nio.ShortBuffer
 import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 import android.opengl.Matrix
 import kotlin.math.cos
 import kotlin.math.sin
@@ -18,7 +17,7 @@ import kotlin.math.sin
 /**
  * High-performance OpenGL ES 2.0 renderer for 3D Earth wallpaper using procedural sphere
  */
-class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
+class EarthRenderer(private val context: Context) : GLESRenderer {
     
     // Textured sphere shaders with lighting
     private val vertexShaderCode = """
@@ -69,10 +68,10 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
             vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
             vec3 finalColor = earthColor;
 
-            // Additive glow from beacon, with a more pronounced gradient
+            // Additive glow from beacon, even more subtle
             float beaconDistance = length(v_BeaconDirection);
-            float beaconGlow = smoothstep(0.15, 0.0, beaconDistance); // Sharper falloff
-            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 1.2; // Brighter center
+            float beaconGlow = smoothstep(0.1, 0.0, beaconDistance); // Even smaller falloff
+            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 0.6; // Further reduced intensity
 
             // Apply lighting using the view direction as the primary light source ("headlight")
             vec3 normal = normalize(vNormalView);
@@ -115,7 +114,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     private val beaconRenderer = BeaconRenderer(context)
 
-    override fun onSurfaceCreated(unused: GL10?, config: EGLConfig?) {
+    override fun onSurfaceCreated(config: EGLConfig?) {
         Log.d("NSEarthDebug", "=== onSurfaceCreated: EarthRenderer started ===")
         GLES32.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
         GLES32.glEnable(GLES32.GL_DEPTH_TEST)
@@ -201,7 +200,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         beaconRenderer.setup()
     }
 
-    override fun onDrawFrame(unused: GL10?) {
+    override fun onDrawFrame() {
         frameCount++
         // Increment angle and time at the beginning
         angle += 0.1f
@@ -293,7 +292,7 @@ class EarthRenderer(private val context: Context) : GLSurfaceView.Renderer {
         drawBeacon()
     }
 
-    override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
+    override fun onSurfaceChanged(width: Int, height: Int) {
         GLES32.glViewport(0, 0, width, height)
         val ratio = width.toFloat() / height
         // Set up a perspective projection matrix

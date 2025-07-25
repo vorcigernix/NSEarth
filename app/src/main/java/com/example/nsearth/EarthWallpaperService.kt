@@ -16,7 +16,7 @@ class EarthWallpaperService : WallpaperService() {
 
     inner class EarthEngine : Engine(), SurfaceHolder.Callback {
         private var glThread: GLThread? = null
-        private var renderer: GLSurfaceView.Renderer? = null
+        private var renderer: GLESRenderer? = null
         private val lock = ReentrantLock()
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
@@ -59,7 +59,7 @@ class EarthWallpaperService : WallpaperService() {
     }
 
     /** GL rendering thread directly tied to the wallpaper surface **/
-    private class GLThread(private val holder: SurfaceHolder, private val renderer: GLSurfaceView.Renderer) : Thread() {
+    private class GLThread(private val holder: SurfaceHolder, private val renderer: GLESRenderer) : Thread() {
         private val lock = ReentrantLock()
         private val condition = lock.newCondition()
         private var running = false
@@ -95,8 +95,8 @@ class EarthWallpaperService : WallpaperService() {
 
         override fun run() {
             initEGL()
-            renderer.onSurfaceCreated(null, null)
-            renderer.onSurfaceChanged(null, width, height)
+            renderer.onSurfaceCreated(null)
+            renderer.onSurfaceChanged(width, height)
 
             var lastW = -1
             var lastH = -1
@@ -115,12 +115,12 @@ class EarthWallpaperService : WallpaperService() {
                 if (exitNow) break
 
                 if (curW != lastW || curH != lastH) {
-                    renderer.onSurfaceChanged(null, curW, curH)
+                    renderer.onSurfaceChanged(curW, curH)
                     lastW = curW
                     lastH = curH
                 }
 
-                renderer.onDrawFrame(null)
+                renderer.onDrawFrame()
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
                 sleep(16)
             }

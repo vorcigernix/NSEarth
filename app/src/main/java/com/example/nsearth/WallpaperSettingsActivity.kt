@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.util.TypedValue
 import android.graphics.Color
+import androidx.core.graphics.toColorInt
 
 /**
  * Simple settings activity for the 3D Earth live wallpaper
@@ -20,12 +21,12 @@ class WallpaperSettingsActivity : Activity() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            setBackgroundColor(Color.parseColor("#1a1a2e"))
+            setBackgroundColor("#1a1a2e".toColorInt())
         }
         
         // Title
         val title = TextView(this).apply {
-            text = "Network State"
+            text = getString(R.string.settings_title)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
             setTextColor(Color.WHITE)
             setPadding(0, 0, 0, 32)
@@ -34,17 +35,17 @@ class WallpaperSettingsActivity : Activity() {
         // Description
         val description = TextView(this).apply {
             text = """
-                Enjoy a beautiful 3D spinning Earth as your Network State live wallpaper!
+                ${getString(R.string.settings_description)}
                 
-                Features:
-                • High-performance OpenGL ES 2.0 rendering
-                • Realistic Earth texture with clouds
-                • Smooth 60 FPS animation
-                • Battery optimized
+                ${getString(R.string.features_title)}
+                • ${getString(R.string.feature_opengl)}
+                • ${getString(R.string.feature_texture)}
+                • ${getString(R.string.feature_animation)}
+                • ${getString(R.string.feature_battery)}
                 
-                The Earth rotates automatically and provides a mesmerizing view of our planet.
+                ${getString(R.string.description_footer)}
                 
-                Settings can be added here in future updates.
+                ${getString(R.string.settings_footer)}
             """.trimIndent()
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setTextColor(Color.LTGRAY)

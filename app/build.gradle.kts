@@ -41,7 +41,7 @@ dependencies {
     implementation(libs.material)
     
     // OpenGL ES and graphics
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation(libs.kotlinx.coroutines.android)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
