@@ -29,22 +29,22 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         uniform mat4 uMVPMatrix;
         uniform mat4 uModelMatrix;
         uniform mat4 uViewMatrix;
-        varying vec3 vNormalView;
-        varying vec2 vTexCoordOut;
-        varying vec3 vModelPos; // New varying for 3D noise
-        varying vec3 v_ViewPosition; // Vertex position in view space
-        uniform vec3 u_BeaconPosition;
-        varying vec3 v_BeaconDirection;
+        uniform vec3 u_LightPosition; // Sun position in world space
+
+        varying vec3 v_Normal;
+        varying vec3 v_ViewPosition;
+        varying vec3 v_LightDirection;
+        varying vec2 v_TexCoord;
 
         void main() {
             vec4 modelPosition = uModelMatrix * vec4(vPosition, 1.0);
-            v_ViewPosition = (uViewMatrix * modelPosition).xyz;
             gl_Position = uMVPMatrix * vec4(vPosition, 1.0);
             
-            vNormalView = normalize((uViewMatrix * uModelMatrix * vec4(vNormal, 0.0)).xyz);
-            vTexCoordOut = vTexCoord;
-            vModelPos = modelPosition.xyz;
-            v_BeaconDirection = u_BeaconPosition - vModelPos;
+            // Transform vectors to world space
+            v_ViewPosition = (uViewMatrix * modelPosition).xyz;
+            v_Normal = normalize(mat3(uModelMatrix) * vNormal);
+            v_LightDirection = normalize(u_LightPosition - modelPosition.xyz);
+            v_TexCoord = vTexCoord;
         }
     """
 
@@ -52,46 +52,41 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         #version 100
         precision highp float;
         uniform sampler2D uTexture;
-        uniform sampler2D uCloudTexture; // New uniform for cloud texture
-        uniform float uTime;
-        uniform mat4 uModelMatrix;
-        uniform mat4 uViewMatrix;
-        varying vec3 vNormalView;
-        varying vec2 vTexCoordOut;
-        varying vec3 vModelPos;
-        varying vec3 v_ViewPosition; // Vertex position in view space
-        uniform vec3 u_BeaconPosition;
-        varying vec3 v_BeaconDirection;
+        uniform sampler2D uCloudTexture;
+        uniform sampler2D uSpecularTexture;
         
+        varying vec3 v_Normal;
+        varying vec3 v_ViewPosition;
+        varying vec3 v_LightDirection;
+        varying vec2 v_TexCoord;
+
         void main() {
-            // Sample base Earth and cloud textures
-            vec3 earthColor = texture2D(uTexture, vTexCoordOut).rgb;
-            vec3 finalColor = earthColor;
+            // Sample textures
+            vec3 dayColor = texture2D(uTexture, v_TexCoord).rgb;
+            vec3 cloudColor = texture2D(uCloudTexture, v_TexCoord).rgb;
+            float specularMask = texture2D(uSpecularTexture, v_TexCoord).r;
 
-            // Additive glow from beacon, even more subtle
-            float beaconDistance = length(v_BeaconDirection);
-            float beaconGlow = smoothstep(0.1, 0.0, beaconDistance); // Even smaller falloff
-            finalColor += vec3(1.0, 1.0, 0.8) * beaconGlow * 0.6; // Further reduced intensity
+            // Combine day and cloud textures
+            vec3 finalColor = mix(dayColor, cloudColor, cloudColor.r);
 
-            // Apply lighting using the view direction as the primary light source ("headlight")
-            vec3 normal = normalize(vNormalView);
-            vec3 viewDir = normalize(-v_ViewPosition); // Direction from surface to camera
-            
-            // Ambient component provides a soft, global light
-            float ambient = 0.2;
-            
-            // Diffuse component is based on the view angle
-            float diff = max(dot(normal, viewDir), 0.0);
-            
-            // Combine for final lighting
-            vec3 litEarth = finalColor * (ambient + diff);
+            // Lighting
+            float ambient = 0.1;
+            float diffuse = max(dot(v_Normal, v_LightDirection), 0.0);
 
-            // Add atmospheric halo (rim lighting)
-            float rim = 1.0 - max(dot(normal, viewDir), 0.0);
+            // Specular (shininess on oceans)
+            vec3 viewDir = normalize(-v_ViewPosition);
+            vec3 reflectDir = reflect(-v_LightDirection, v_Normal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0); // Increased shininess
+            vec3 specular = vec3(0.8, 0.8, 0.8) * spec * specularMask; // Apply mask
+
+            // Atmospheric halo (rim lighting)
+            float rim = 1.0 - max(dot(v_Normal, viewDir), 0.0);
             rim = smoothstep(0.6, 1.0, rim);
             vec3 rimColor = vec3(0.3, 0.5, 1.0);
 
-            gl_FragColor = vec4(litEarth + rimColor * rim * 0.2, 1.0);
+            // Final color calculation
+            vec3 litColor = finalColor * (ambient + diffuse) + specular;
+            gl_FragColor = vec4(litColor + rimColor * rim * 0.2, 1.0);
         }
     """
 
@@ -117,6 +112,7 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
     private var modelIndexCount = 0
     private var textureId: Int = 0
     private var cloudTextureId: Int = 0
+    private var specularTextureId: Int = 0
 
     private lateinit var beaconRenderer: BeaconRenderer
     private val earthRadius = 1.5f
@@ -189,8 +185,10 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         // Load texture
         textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
         cloudTextureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
+        specularTextureId = TextureUtils.loadTexture(context, "earth_specular.jpg")
         Log.d("NSEarthDebug", "Loaded cloudless texture ID: $textureId")
         Log.d("NSEarthDebug", "Loaded cloud texture ID: $cloudTextureId")
+        Log.d("NSEarthDebug", "Loaded specular texture ID: $specularTextureId")
         
         // Setup model index buffer
         val ib = ByteBuffer.allocateDirect(model.indices.size * 2)
@@ -249,6 +247,12 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, cloudTextureId)
         val cloudTextureHandle = GLES20.glGetUniformLocation(mProgram, "uCloudTexture")
         GLES20.glUniform1i(cloudTextureHandle, 1)
+
+        // Bind the specular texture to texture unit 2
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE2)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, specularTextureId)
+        val specularTextureHandle = GLES20.glGetUniformLocation(mProgram, "uSpecularTexture")
+        GLES20.glUniform1i(specularTextureHandle, 2)
         
         val positionHandle = GLES20.glGetAttribLocation(mProgram, "vPosition")
         GLES20.glEnableVertexAttribArray(positionHandle)
@@ -270,7 +274,7 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         val modelMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uModelMatrix")
         val viewMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uViewMatrix")
         val timeHandle = GLES20.glGetUniformLocation(mProgram, "uTime")
-        val beaconPositionHandle = GLES20.glGetUniformLocation(mProgram, "u_BeaconPosition")
+        val lightPositionHandle = GLES20.glGetUniformLocation(mProgram, "u_LightPosition")
         
         Matrix.setIdentityM(modelMatrix, 0)
         Matrix.rotateM(modelMatrix, 0, -90f, 0f, 1f, 0f) // Initial rotation to align texture
@@ -281,17 +285,7 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         GLES20.glUniformMatrix4fv(modelMatrixHandle, 1, false, modelMatrix, 0)
         GLES20.glUniformMatrix4fv(viewMatrixHandle, 1, false, viewMatrix, 0)
         GLES20.glUniform1f(timeHandle, time)
-
-        val cartesianPosition = MathUtils.gpsToCartesian(MAIN_BEACON_LAT, MAIN_BEACON_LON, EARTH_RADIUS, beaconPosition)
-        
-        // Apply Earth's rotation to beacon position for surface glow
-        Matrix.multiplyMV(rotatedBeaconPositionVec4, 0, modelMatrix, 0, floatArrayOf(cartesianPosition[0], cartesianPosition[1], cartesianPosition[2], 1f), 0)
-        rotatedBeaconPosition[0] = rotatedBeaconPositionVec4[0]
-        rotatedBeaconPosition[1] = rotatedBeaconPositionVec4[1]
-        rotatedBeaconPosition[2] = rotatedBeaconPositionVec4[2]
-        
-        // Pass the already-rotated beacon position to avoid double transformation in shader
-        GLES20.glUniform3fv(beaconPositionHandle, 1, rotatedBeaconPosition, 0)
+        GLES20.glUniform3f(lightPositionHandle, 10.0f, 0.0f, 0.0f)
 
         modelIndexBuffer.position(0)
         GLES20.glDrawElements(GLES20.GL_TRIANGLES, modelIndexCount, GLES20.GL_UNSIGNED_SHORT, modelIndexBuffer)
