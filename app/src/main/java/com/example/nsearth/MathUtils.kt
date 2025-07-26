@@ -187,4 +187,14 @@ object MathUtils {
         result[10] = 1f
         result[15] = 1f
     }
+
+    /**
+     * Performs smooth interpolation between two values.
+     */
+    fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
+        // Scale, bias and saturate x to 0..1 range
+        val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0.0f, 1.0f)
+        // Evaluate polynomial
+        return t * t * (3.0f - 2.0f * t)
+    }
 } 

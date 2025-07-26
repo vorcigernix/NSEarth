@@ -9,74 +9,68 @@ import java.nio.ShortBuffer
 
 class BeaconRenderer(private val context: Context) {
 
-    private var vertexBuffer: FloatBuffer? = null
-    private var normalBuffer: FloatBuffer? = null
-    private var indexBuffer: ShortBuffer? = null
-    private var indexCount: Int = 0
-
     private var program: Int = 0
+    private var positionHandle: Int = 0
+    private var normalHandle: Int = 0
+    private var mvpMatrixHandle: Int = 0
+    private var modelMatrixHandle: Int = 0
+    private var lightDirectionHandle: Int = 0
     private var timeHandle: Int = 0
+    private var colorHandle: Int = 0
+    private var pulseHandle: Int = 0
 
-    private val beaconModel: ModelLoader.Model = BeaconGenerator.createBeacon(0.01f, 0.5f, 16)
+    private lateinit var mainBeaconModel: ModelLoader.Model
+    private lateinit var cityBeaconModel: ModelLoader.Model
 
     fun setup() {
         val vertexShaderSource = ShaderUtils.readShaderFromFile(context, "shaders/beacon_vertex.glsl")
         val fragmentShaderSource = ShaderUtils.readShaderFromFile(context, "shaders/beacon_fragment.glsl")
         program = ShaderUtils.createProgram(vertexShaderSource, fragmentShaderSource)
+
         timeHandle = GLES20.glGetUniformLocation(program, "u_Time")
-        loadBeaconModel()
+        mvpMatrixHandle = GLES20.glGetUniformLocation(program, "u_MVPMatrix")
+        modelMatrixHandle = GLES20.glGetUniformLocation(program, "u_ModelMatrix")
+        lightDirectionHandle = GLES20.glGetUniformLocation(program, "u_LightDirection")
+        colorHandle = GLES20.glGetUniformLocation(program, "u_Color")
+        pulseHandle = GLES20.glGetUniformLocation(program, "u_Pulse")
+
+        positionHandle = GLES20.glGetAttribLocation(program, "a_Position")
+        normalHandle = GLES20.glGetAttribLocation(program, "a_Normal")
+
+        mainBeaconModel = BeaconGenerator.createBeacon(0.02f, 0.6f, 16)
+        cityBeaconModel = BeaconGenerator.createBeacon(0.01f, 0.5f, 16)
     }
 
-    private fun loadBeaconModel() {
-        indexCount = beaconModel.indexCount
-
-        vertexBuffer = ByteBuffer.allocateDirect(beaconModel.vertices.size * 4)
-            .order(ByteOrder.nativeOrder()).asFloatBuffer()
-            .put(beaconModel.vertices).position(0) as FloatBuffer
-
-        normalBuffer = ByteBuffer.allocateDirect(beaconModel.normals.size * 4)
-            .order(ByteOrder.nativeOrder()).asFloatBuffer()
-            .put(beaconModel.normals).position(0) as FloatBuffer
-
-        indexBuffer = ByteBuffer.allocateDirect(beaconModel.indices.size * 2)
-            .order(ByteOrder.nativeOrder()).asShortBuffer()
-            .put(beaconModel.indices).position(0) as ShortBuffer
-    }
-
-    fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray, time: Float) {
+    fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray, time: Float, isMainBeacon: Boolean, alpha: Float, pulse: Float) {
         GLES20.glUseProgram(program)
 
-        val positionHandle = GLES20.glGetAttribLocation(program, "a_Position")
+        val beaconModel = if (isMainBeacon) mainBeaconModel else cityBeaconModel
+
         GLES20.glEnableVertexAttribArray(positionHandle)
         GLES20.glVertexAttribPointer(
-            positionHandle, 3, GLES20.GL_FLOAT, false, 0, vertexBuffer
+            positionHandle, 3, GLES20.GL_FLOAT, false, 0, beaconModel.vertexBuffer
         )
 
-        val normalHandle = GLES20.glGetAttribLocation(program, "a_Normal")
         GLES20.glEnableVertexAttribArray(normalHandle)
         GLES20.glVertexAttribPointer(
-            normalHandle, 3, GLES20.GL_FLOAT, false, 0, normalBuffer
+            normalHandle, 3, GLES20.GL_FLOAT, false, 0, beaconModel.normalBuffer
         )
 
-        val mvpMatrixHandle = GLES20.glGetUniformLocation(program, "u_MVPMatrix")
         GLES20.glUniformMatrix4fv(mvpMatrixHandle, 1, false, mvpMatrix, 0)
-
-        val modelMatrixHandle = GLES20.glGetUniformLocation(program, "u_ModelMatrix")
         GLES20.glUniformMatrix4fv(modelMatrixHandle, 1, false, modelMatrix, 0)
-
-        val lightDirectionHandle = GLES20.glGetUniformLocation(program, "u_LightDirection")
         GLES20.glUniform3fv(lightDirectionHandle, 1, lightDirection, 0)
-
         GLES20.glUniform1f(timeHandle, time)
+        GLES20.glUniform4f(colorHandle, 1.0f, 1.0f, 0.8f, alpha)
+        GLES20.glUniform1f(pulseHandle, pulse)
 
         GLES20.glDrawElements(
             GLES20.GL_TRIANGLES,
-            indexCount,
+            beaconModel.indexCount,
             GLES20.GL_UNSIGNED_SHORT,
-            indexBuffer
+            beaconModel.indexBuffer
         )
 
         GLES20.glDisableVertexAttribArray(positionHandle)
         GLES20.glDisableVertexAttribArray(normalHandle)
     }
-} 
+}

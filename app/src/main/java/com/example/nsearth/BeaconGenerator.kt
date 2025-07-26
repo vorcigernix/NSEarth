@@ -5,7 +5,7 @@ import kotlin.math.sin
 
 object BeaconGenerator {
     fun createBeacon(
-        baseRadius: Float = 0.01f,
+        baseRadius: Float,
         height: Float,
         segments: Int
     ): ModelLoader.Model {

@@ -4,6 +4,10 @@ import android.content.Context
 import android.util.Log
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
+import java.nio.ShortBuffer
 import kotlin.collections.ArrayList
 
 /**
@@ -23,6 +27,10 @@ class ModelLoader {
         val vertexCount: Int,
         val indexCount: Int
     ) {
+        val vertexBuffer: FloatBuffer = ByteBuffer.allocateDirect(vertices.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().put(vertices).position(0) as FloatBuffer
+        val normalBuffer: FloatBuffer = ByteBuffer.allocateDirect(normals.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().put(normals).position(0) as FloatBuffer
+        val indexBuffer: ShortBuffer = ByteBuffer.allocateDirect(indices.size * 2).order(ByteOrder.nativeOrder()).asShortBuffer().put(indices).position(0) as ShortBuffer
+
         fun cleanup() {
             // Model data will be garbage collected
         }
