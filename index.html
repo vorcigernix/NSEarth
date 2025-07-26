@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSEarth - Advanced 3D Earth Live Wallpaper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #001122 0%, #003366 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 60px 0;
+            color: white;
+        }
+
+        .logo {
+            width: 120px;
+            height: 80px;
+            margin: 0 auto 30px;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .flag-icon {
+            width: 60px;
+            height: 40px;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #4fc3f7, #29b6f6, #03a9f4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 50px;
+            margin-bottom: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(20px);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 30px;
+            border-radius: 15px;
+            border-left: 5px solid #29b6f6;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-card h3 {
+            color: #1976d2;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .screenshots {
+            margin: 50px 0;
+        }
+
+        .screenshot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .screenshot {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .screenshot:hover {
+            transform: scale(1.02);
+        }
+
+        .screenshot img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .tech-stack {
+            background: linear-gradient(135deg, #263238 0%, #37474f 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            margin: 40px 0;
+        }
+
+        .tech-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .tech-tag {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .performance-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #4caf50, #8bc34a);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            margin: 20px 0;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .section-title {
+            font-size: 2.2rem;
+            color: #1976d2;
+            margin-bottom: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .section-title::after {
+            content: '';
+            display: block;
+            width: 80px;
+            height: 4px;
+            background: linear-gradient(45deg, #29b6f6, #03a9f4);
+            margin: 15px auto;
+            border-radius: 2px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 30px 20px;
+            }
+            
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <svg class="flag-icon" viewBox="0 0 30 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9.04883 0C14.4015 1.58136e-05 18.0466 0.857342 21.4111 0.857422C24.5739 0.857419 26.8592 0.730968 29.0273 0.478516C29.2469 0.453142 29.4413 0.621298 29.4414 0.838867V19.2832C29.4411 19.4516 29.323 19.5976 29.1543 19.626C27.6623 19.8749 24.1475 20 21.4111 20C18.4798 19.9999 14.1466 19.1426 9.55859 19.1426C5.14747 19.1426 2.72034 19.3956 0.432617 19.7822C0.207077 19.8203 0.000341557 19.6499 0 19.4248V1.0332C3.69636e-05 0.851129 0.136849 0.697243 0.320312 0.673828C2.56107 0.389876 5.35291 0 9.04883 0ZM13.4951 8.76074C11.9493 8.65328 10.6111 8.66895 9.43164 8.66895V11.1475C10.2548 11.1475 11.7426 11.1495 13.4922 11.2998C13.4903 13.3072 13.492 15.0743 13.5088 15.4326C14.1458 15.5754 14.5286 15.5754 15.791 15.8018V11.5508C17.549 11.7554 18.8433 11.8613 20.1377 11.8613V9.29004C18.7357 9.29004 17.6985 9.187 15.791 8.98242V4.79199C15.7758 4.78999 14.1434 4.57627 13.5088 4.57617C13.5086 4.61678 13.5007 6.53989 13.4951 8.76074Z" fill="#001122"/>
+                </svg>
+            </div>
+            <h1>NSEarth</h1>
+            <p class="subtitle">Advanced 3D Earth Live Wallpaper for Android</p>
+            <div class="performance-badge">⚡ Optimized Performance • 🌍 Realistic Lighting • 🎯 Smooth 30 FPS</div>
+        </header>
+
+        <main class="content">
+            <section>
+                <h2 class="section-title">About NSEarth</h2>
+                <p style="font-size: 1.1rem; text-align: center; margin-bottom: 30px; color: #546e7a;">
+                    NSEarth is a stunning live wallpaper that brings our beautiful planet to your Android device. 
+                    Experience Earth in full 3D glory with realistic lighting, dynamic city beacons, and optimized performance 
+                    that respects your device's battery life.
+                </p>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>🌍 Realistic 3D Earth</h3>
+                        <p>High-resolution Earth textures with cloud layers and atmospheric effects. Watch our planet rotate in real-time with stunning detail.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>☀️ Dynamic Sun Lighting</h3>
+                        <p>Realistic sun positioning creates natural day/night cycles with specular reflections on oceans and atmospheric rim lighting.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>🏙️ City Beacons</h3>
+                        <p>Animated beacons mark major cities worldwide, pulsing with gentle light that adds life to the planet's surface.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>⚡ Performance Optimized</h3>
+                        <p>Smart resource management pauses rendering when wallpaper isn't visible, preserving battery life without compromising quality.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>🎮 Smooth Animation</h3>
+                        <p>Optimized 30 FPS rendering provides smooth Earth rotation while maintaining excellent performance on all devices.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <h3>🔧 Advanced OpenGL</h3>
+                        <p>Built with modern OpenGL ES 2.0 featuring procedural sphere generation, efficient texture management, and adaptive frame rates.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="screenshots">
+                <h2 class="section-title">Screenshots</h2>
+                <div class="screenshot-grid">
+                    <div class="screenshot">
+                        <img src="screenshot1.jpeg" alt="NSEarth Wallpaper - View 1" loading="lazy">
+                    </div>
+                    <div class="screenshot">
+                        <img src="screenshot2.jpeg" alt="NSEarth Wallpaper - View 2" loading="lazy">
+                    </div>
+                </div>
+            </section>
+
+            <section class="tech-stack">
+                <h2 style="color: white; text-align: center; margin-bottom: 20px;">🛠️ Technical Implementation</h2>
+                <p style="text-align: center; margin-bottom: 20px; opacity: 0.9;">Built with cutting-edge technologies for optimal performance</p>
+                <div class="tech-list">
+                    <span class="tech-tag">Kotlin</span>
+                    <span class="tech-tag">OpenGL ES 2.0</span>
+                    <span class="tech-tag">Android Live Wallpaper Service</span>
+                    <span class="tech-tag">GLSL Shaders</span>
+                    <span class="tech-tag">3D Graphics</span>
+                    <span class="tech-tag">Texture Mapping</span>
+                    <span class="tech-tag">Procedural Generation</span>
+                    <span class="tech-tag">Performance Optimization</span>
+                    <span class="tech-tag">Resource Management</span>
+                    <span class="tech-tag">Adaptive Icons</span>
+                </div>
+            </section>
+
+            <section>
+                <h2 class="section-title">Key Features</h2>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0;">
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">🌎</div>
+                        <h4>High-Resolution Textures</h4>
+                        <p style="color: #666; font-size: 0.9rem;">Detailed Earth surface with cloud layers</p>
+                    </div>
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">🔋</div>
+                        <h4>Battery Optimized</h4>
+                        <p style="color: #666; font-size: 0.9rem;">Smart pausing when wallpaper is invisible</p>
+                    </div>
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">⚡</div>
+                        <h4>Smooth Performance</h4>
+                        <p style="color: #666; font-size: 0.9rem;">Optimized 30 FPS rendering</p>
+                    </div>
+                    <div style="text-align: center; padding: 20px;">
+                        <div style="font-size: 3rem; margin-bottom: 10px;">🎨</div>
+                        <h4>Beautiful Lighting</h4>
+                        <p style="color: #666; font-size: 0.9rem;">Realistic sun positioning and atmospheric effects</p>
+                    </div>
+                </div>
+            </section>
+
+            <section style="text-align: center; margin: 50px 0; padding: 40px; background: linear-gradient(45deg, #e3f2fd, #f3e5f5); border-radius: 15px;">
+                <h3 style="color: #1976d2; margin-bottom: 20px; font-size: 1.5rem;">Ready to Transform Your Home Screen?</h3>
+                <p style="color: #666; margin-bottom: 30px;">Experience Earth like never before with NSEarth live wallpaper. Beautiful, efficient, and built with care.</p>
+                <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                    <div style="background: white; padding: 15px 30px; border-radius: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <strong>📱 Android 7.0+</strong>
+                    </div>
+                    <div style="background: white; padding: 15px 30px; border-radius: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <strong>🎯 Live Wallpaper</strong>
+                    </div>
+                    <div style="background: white; padding: 15px 30px; border-radius: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                        <strong>⚡ Optimized</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section style="text-align: center; margin: 50px 0; padding: 40px; background: linear-gradient(135deg, #f1f8e9, #e8f5e8); border-radius: 15px; border: 2px solid #4caf50;">
+                <h3 style="color: #2e7d32; margin-bottom: 20px; font-size: 1.5rem;">🔓 Open Source Project</h3>
+                <p style="color: #555; margin-bottom: 20px;">NSEarth is free and open source software, licensed under the Apache License 2.0.</p>
+                <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px;">
+                    This means you can freely use, modify, and distribute the code. Contributions and improvements are welcome!
+                </p>
+                <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+                    <div style="background: white; padding: 12px 20px; border-radius: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <strong>📄 Apache 2.0 License</strong>
+                    </div>
+                    <div style="background: white; padding: 12px 20px; border-radius: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <strong>🔧 Fork Friendly</strong>
+                    </div>
+                    <div style="background: white; padding: 12px 20px; border-radius: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <strong>🤝 Contributions Welcome</strong>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <footer style="text-align: center; padding: 40px; color: rgba(255,255,255,0.7);">
+        <p>Built in 2025 by Adam Sobotka.</p>
+    </footer>
+</body>
+</html> 
