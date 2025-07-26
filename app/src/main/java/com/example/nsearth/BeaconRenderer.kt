@@ -18,6 +18,9 @@ class BeaconRenderer(private val context: Context) {
     private var timeHandle: Int = 0
     private var colorHandle: Int = 0
     private var pulseHandle: Int = 0
+    
+    // Visibility state for optimizations
+    private var isVisible = true
 
     private lateinit var mainBeaconModel: ModelLoader.Model
     private lateinit var cityBeaconModel: ModelLoader.Model
@@ -42,6 +45,9 @@ class BeaconRenderer(private val context: Context) {
     }
 
     fun draw(mvpMatrix: FloatArray, modelMatrix: FloatArray, lightDirection: FloatArray, time: Float, isMainBeacon: Boolean, alpha: Float, pulse: Float) {
+        // Skip rendering if not visible (this should rarely happen due to caller optimizations, but it's a safety net)
+        if (!isVisible) return
+        
         GLES20.glUseProgram(program)
 
         val beaconModel = if (isMainBeacon) mainBeaconModel else cityBeaconModel
@@ -72,6 +78,12 @@ class BeaconRenderer(private val context: Context) {
 
         GLES20.glDisableVertexAttribArray(positionHandle)
         GLES20.glDisableVertexAttribArray(normalHandle)
+    }
+    
+    fun onVisibilityChanged(visible: Boolean) {
+        isVisible = visible
+        // BeaconRenderer doesn't have heavy resources to manage like textures,
+        // but we track visibility for potential future optimizations
     }
 
     fun release() {

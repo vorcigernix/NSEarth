@@ -24,6 +24,20 @@ class EarthWallpaperService : WallpaperService() {
             surfaceHolder.addCallback(this)
         }
 
+        // Adaptive frame rate control
+        fun setFrameRate(fps: Int) {
+            glThread?.setTargetFrameRate(fps)
+        }
+        
+        // Automatically adjust frame rate based on visibility and power state
+        private fun updateFrameRateForState(visible: Boolean) {
+            val frameRate = when {
+                !visible -> 1 // Very low when not visible (safety fallback)
+                else -> 30 // Smooth 30 FPS when visible - Earth rotation is slow enough that 30 FPS looks great
+            }
+            setFrameRate(frameRate)
+        }
+
         // SurfaceHolder.Callback implementations
         override fun surfaceCreated(holder: SurfaceHolder) {
             // Surface created - initializing OpenGL
@@ -48,6 +62,7 @@ class EarthWallpaperService : WallpaperService() {
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
+            updateFrameRateForState(visible)
             glThread?.setRunning(visible)
         }
 
@@ -66,6 +81,10 @@ class EarthWallpaperService : WallpaperService() {
         private var shouldExit = false
         private var width = 0
         private var height = 0
+        
+        // Add adaptive frame rate variables
+        private var targetFrameRate = 60 // Default to 60 FPS
+        private var frameTimeMs = 16L // 60 FPS = ~16ms per frame
 
         private var eglDisplay = EGL14.EGL_NO_DISPLAY
         private var eglContext = EGL14.EGL_NO_CONTEXT
@@ -74,7 +93,16 @@ class EarthWallpaperService : WallpaperService() {
         fun setRunning(run: Boolean) {
             lock.withLock {
                 running = run
+                // Notify the renderer about visibility changes
+                renderer.onVisibilityChanged(run)
                 condition.signalAll()
+            }
+        }
+
+        fun setTargetFrameRate(fps: Int) {
+            lock.withLock {
+                targetFrameRate = fps.coerceIn(1, 60)
+                frameTimeMs = 1000L / targetFrameRate
             }
         }
 
@@ -100,29 +128,57 @@ class EarthWallpaperService : WallpaperService() {
 
             var lastW = -1
             var lastH = -1
+            var lastFrameTime = System.currentTimeMillis()
+            
             while (true) {
                 var exitNow = false
-                var curW:Int
-                var curH:Int
+                var isRunning: Boolean
+                var curW: Int
+                var curH: Int
+                var currentFrameTimeMs: Long
+                
                 lock.withLock {
+                    // Wait while not running and not exiting - this is the key optimization
                     while (!running && !shouldExit) {
-                        condition.await()
+                        condition.await() // Thread sleeps here when wallpaper is not visible
                     }
                     if (shouldExit) exitNow = true
+                    isRunning = running
                     curW = width
                     curH = height
+                    currentFrameTimeMs = frameTimeMs
                 }
+                
                 if (exitNow) break
 
-                if (curW != lastW || curH != lastH) {
-                    renderer.onSurfaceChanged(curW, curH)
-                    lastW = curW
-                    lastH = curH
-                }
+                // Only render when visible
+                if (isRunning) {
+                    if (curW != lastW || curH != lastH) {
+                        renderer.onSurfaceChanged(curW, curH)
+                        lastW = curW
+                        lastH = curH
+                    }
 
-                renderer.onDrawFrame()
-                EGL14.eglSwapBuffers(eglDisplay, eglSurface)
-                sleep(16)
+                    val currentTime = System.currentTimeMillis()
+                    val deltaTime = currentTime - lastFrameTime
+                    
+                    // Only render if enough time has passed for target frame rate
+                    if (deltaTime >= currentFrameTimeMs) {
+                        renderer.onDrawFrame()
+                        EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                        lastFrameTime = currentTime
+                    } else {
+                        // Sleep for the remaining time to maintain target frame rate
+                        val sleepTime = currentFrameTimeMs - deltaTime
+                        if (sleepTime > 0) {
+                            sleep(sleepTime)
+                        }
+                    }
+                } else {
+                    // If not running, just wait (this shouldn't happen due to the while loop above,
+                    // but it's a safety net)
+                    sleep(100)
+                }
             }
 
             renderer.release() // Release renderer resources

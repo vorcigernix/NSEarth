@@ -120,6 +120,9 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
 
     private lateinit var beaconRenderer: BeaconRenderer
     private val earthRadius = 1.5f
+    
+    // Visibility state for optimizations
+    private var isVisible = true
 
     // Pre-allocated arrays to avoid allocation in onDrawFrame
     private val beaconModelMatrix = FloatArray(16)
@@ -223,7 +226,10 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
     }
 
     override fun onDrawFrame() {
-        // ... (onDrawFrame setup remains the same)
+        // Early exit if not visible - this shouldn't happen often due to GL thread optimizations,
+        // but it's a safety net for any edge cases
+        if (!isVisible) return
+        
         frameCount++
         // Increment angle and time at the beginning
         angle += 0.1f
@@ -374,9 +380,57 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
     }
 
+    override fun onVisibilityChanged(visible: Boolean) {
+        isVisible = visible
+        
+        if (visible) {
+            // Reload textures only if they were released
+            if (textureId == 0) {
+                textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
+                Log.d("NSEarthDebug", "Reloaded cloudless texture ID: $textureId")
+            }
+            if (cloudTextureId == 0) {
+                cloudTextureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
+                Log.d("NSEarthDebug", "Reloaded cloud texture ID: $cloudTextureId")
+            }
+        } else {
+            // Release textures to free GPU memory when not visible
+            if (textureId != 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
+                textureId = 0
+            }
+            if (cloudTextureId != 0) {
+                GLES20.glDeleteTextures(1, intArrayOf(cloudTextureId), 0)
+                cloudTextureId = 0
+            }
+            Log.d("NSEarthDebug", "Released textures on visibility change")
+        }
+        
+        // Propagate visibility to beacon renderer if it exists
+        if (::beaconRenderer.isInitialized) {
+            beaconRenderer.onVisibilityChanged(visible)
+        }
+    }
+
     override fun release() {
-        GLES20.glDeleteProgram(mProgram)
-        GLES20.glDeleteTextures(2, intArrayOf(textureId, cloudTextureId), 0)
-        beaconRenderer.release()
+        // Clean up shader program
+        if (mProgram != 0) {
+            GLES20.glDeleteProgram(mProgram)
+            mProgram = 0
+        }
+        
+        // Clean up textures
+        if (textureId != 0 || cloudTextureId != 0) {
+            GLES20.glDeleteTextures(2, intArrayOf(textureId, cloudTextureId), 0)
+            textureId = 0
+            cloudTextureId = 0
+        }
+        
+        // Clean up beacon renderer
+        if (::beaconRenderer.isInitialized) {
+            beaconRenderer.release()
+        }
+        
+        Log.d("NSEarthDebug", "EarthRenderer resources released")
     }
 }
