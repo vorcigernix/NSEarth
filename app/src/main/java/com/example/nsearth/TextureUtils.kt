@@ -14,6 +14,69 @@ object TextureUtils {
     private const val TAG = "TextureUtils"
     
     /**
+     * Creates a simple specular texture programmatically
+     * This is used when earth_specular.jpg is not available
+     */
+    fun createSpecularTexture(): Int {
+        val textureHandle = IntArray(1)
+        
+        try {
+            // Generate texture
+            GLES20.glGenTextures(1, textureHandle, 0)
+            if (textureHandle[0] == 0) {
+                Log.e(TAG, "Failed to generate specular texture")
+                return 0
+            }
+            
+            // Create a simple 64x32 specular map - much more subtle
+            val width = 64
+            val height = 32
+            val pixels = IntArray(width * height)
+            
+            // Create a very subtle specular map - mostly dark with slight ocean reflectivity
+            for (y in 0 until height) {
+                for (x in 0 until width) {
+                    // Very conservative specular values to avoid metallic look
+                    val intensity = 0.1f // Much lower base intensity
+                    
+                    val gray = (intensity * 255).toInt().coerceIn(0, 255)
+                    pixels[y * width + x] = (0xFF shl 24) or (gray shl 16) or (gray shl 8) or gray
+                }
+            }
+            
+            // Bind texture and upload data
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureHandle[0])
+            
+            val buffer = java.nio.ByteBuffer.allocateDirect(pixels.size * 4)
+            buffer.order(java.nio.ByteOrder.nativeOrder())
+            val intBuffer = buffer.asIntBuffer()
+            intBuffer.put(pixels)
+            buffer.position(0)
+            
+            GLES20.glTexImage2D(
+                GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA,
+                width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer
+            )
+            
+            // Set texture parameters
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_REPEAT)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_REPEAT)
+            
+            Log.d(TAG, "Successfully created subtle specular texture (ID: ${textureHandle[0]})")
+            return textureHandle[0]
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating specular texture", e)
+            if (textureHandle[0] != 0) {
+                GLES20.glDeleteTextures(1, textureHandle, 0)
+            }
+            return 0
+        }
+    }
+
+    /**
      * Loads a texture from assets folder
      */
     fun loadTexture(context: Context, filename: String): Int {

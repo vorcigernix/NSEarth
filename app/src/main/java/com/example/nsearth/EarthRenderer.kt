@@ -186,9 +186,17 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
         cloudTextureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
         specularTextureId = TextureUtils.loadTexture(context, "earth_specular.jpg")
+        
+        // If specular texture failed to load, create a procedural one
+        if (specularTextureId == 0) {
+            specularTextureId = TextureUtils.createSpecularTexture()
+            Log.d("NSEarthDebug", "Created fallback specular texture ID: $specularTextureId")
+        } else {
+            Log.d("NSEarthDebug", "Loaded specular texture ID: $specularTextureId")
+        }
+        
         Log.d("NSEarthDebug", "Loaded cloudless texture ID: $textureId")
         Log.d("NSEarthDebug", "Loaded cloud texture ID: $cloudTextureId")
-        Log.d("NSEarthDebug", "Loaded specular texture ID: $specularTextureId")
         
         // Setup model index buffer
         val ib = ByteBuffer.allocateDirect(model.indices.size * 2)
@@ -224,9 +232,10 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
     }
 
     override fun onDrawFrame() {
-        // Early exit if not visible - this shouldn't happen often due to GL thread optimizations,
-        // but it's a safety net for any edge cases
-        if (!isVisible) return
+        // Early exit if not visible - let GL thread handle the pausing
+        if (!isVisible) {
+            return
+        }
         
         frameCount++
         // Increment angle and time at the beginning
@@ -376,34 +385,15 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
 
     override fun onVisibilityChanged(visible: Boolean) {
         isVisible = visible
-        
-        if (visible) {
-            // Reload textures only if they were released
-            if (textureId == 0) {
-                textureId = TextureUtils.loadTexture(context, "earth_cloudless.jpg")
-                Log.d("NSEarthDebug", "Reloaded cloudless texture ID: $textureId")
-            }
-            if (cloudTextureId == 0) {
-                cloudTextureId = TextureUtils.loadTexture(context, "earth_clouds.jpg")
-                Log.d("NSEarthDebug", "Reloaded cloud texture ID: $cloudTextureId")
-            }
-        } else {
-            // Release textures to free GPU memory when not visible
-            if (textureId != 0) {
-                GLES20.glDeleteTextures(1, intArrayOf(textureId), 0)
-                textureId = 0
-            }
-            if (cloudTextureId != 0) {
-                GLES20.glDeleteTextures(1, intArrayOf(cloudTextureId), 0)
-                cloudTextureId = 0
-            }
-            Log.d("NSEarthDebug", "Released textures on visibility change")
-        }
+        Log.d("NSEarthDebug", "Visibility changed to: $visible")
         
         // Propagate visibility to beacon renderer if it exists
         if (::beaconRenderer.isInitialized) {
             beaconRenderer.onVisibilityChanged(visible)
         }
+        
+        // Note: We're keeping textures loaded to avoid reload issues
+        // The GL thread will handle pausing rendering when not visible
     }
 
     override fun release() {
@@ -413,11 +403,12 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
             mProgram = 0
         }
         
-        // Clean up textures
-        if (textureId != 0 || cloudTextureId != 0) {
-            GLES20.glDeleteTextures(2, intArrayOf(textureId, cloudTextureId), 0)
+        // Clean up all textures
+        if (textureId != 0 || cloudTextureId != 0 || specularTextureId != 0) {
+            GLES20.glDeleteTextures(3, intArrayOf(textureId, cloudTextureId, specularTextureId), 0)
             textureId = 0
             cloudTextureId = 0
+            specularTextureId = 0
         }
         
         // Clean up beacon renderer
@@ -425,6 +416,6 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
             beaconRenderer.release()
         }
         
-        Log.d("NSEarthDebug", "EarthRenderer resources released")
+        Log.d("NSEarthDebug", "EarthRenderer fully released")
     }
 }
