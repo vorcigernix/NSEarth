@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Network State Earth</string>
-    <string name="wallpaper_description">Network State Earth - Spinning 3D globe live wallpaper</string>
+    <string name="wallpaper_description">Globe symbolizing a Network States popping up on the the planet surface.</string>
     <string name="settings_title">Network State</string>
     <string name="settings_description">Enjoy a beautiful 3D spinning Earth as your Network State live wallpaper!</string>
     <string name="features_title">Features:</string>
