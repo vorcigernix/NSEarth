@@ -352,7 +352,7 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE)
         
         // With all underlying issues fixed, the standard depth test will now work correctly.
-        beaconRenderer.draw(mvpMatrix, finalBeaconMatrix, lightDirection, time, isMainBeacon, alpha, pulse)
+        beaconRenderer.draw(beaconMvpMatrix, finalBeaconMatrix, lightDirection, time, isMainBeacon, alpha, pulse)
         
         // Restore the original blending mode
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
