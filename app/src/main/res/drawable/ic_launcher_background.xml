@@ -4,6 +4,10 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
   <path
-      android:fillColor="#000033"
+      android:fillColor="#001122"
       android:pathData="M0,0h108v108h-108z"/>
+  <!-- Subtle gradient effect for depth -->
+  <path
+      android:fillColor="#001833"
+      android:pathData="M0,0h108v54h-108z"/>
 </vector>
