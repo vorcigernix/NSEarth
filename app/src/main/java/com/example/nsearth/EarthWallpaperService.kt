@@ -125,6 +125,7 @@ class EarthWallpaperService : WallpaperService() {
                 sleep(16)
             }
 
+            renderer.release() // Release renderer resources
             cleanupEGL()
         }
 

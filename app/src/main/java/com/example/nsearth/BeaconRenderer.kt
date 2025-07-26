@@ -73,4 +73,8 @@ class BeaconRenderer(private val context: Context) {
         GLES20.glDisableVertexAttribArray(positionHandle)
         GLES20.glDisableVertexAttribArray(normalHandle)
     }
+
+    fun release() {
+        GLES20.glDeleteProgram(program)
+    }
 }

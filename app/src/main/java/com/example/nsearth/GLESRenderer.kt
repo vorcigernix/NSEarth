@@ -9,4 +9,5 @@ interface GLESRenderer {
     fun onSurfaceCreated(config: EGLConfig?)
     fun onSurfaceChanged(width: Int, height: Int)
     fun onDrawFrame()
+    fun release()
 }

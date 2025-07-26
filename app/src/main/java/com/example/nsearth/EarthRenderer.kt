@@ -121,6 +121,20 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
     private lateinit var beaconRenderer: BeaconRenderer
     private val earthRadius = 1.5f
 
+    // Pre-allocated arrays to avoid allocation in onDrawFrame
+    private val beaconModelMatrix = FloatArray(16)
+    private val orientationMatrix = FloatArray(16)
+    private val finalBeaconMatrix = FloatArray(16)
+    private val beaconMvpMatrix = FloatArray(16)
+    private val lightDirection = floatArrayOf(0.7f, 0.0f, -0.7f)
+    private val rotatedBeaconPositionVec4 = FloatArray(4)
+    private val rotatedBeaconPosition = FloatArray(3)
+    private val beaconPosition = FloatArray(3)
+    private val up = FloatArray(3)
+    private val right = FloatArray(3)
+    private val forward = FloatArray(3)
+    private val arbitraryVector = floatArrayOf(0f, 1f, 0f)
+
     override fun onSurfaceCreated(config: EGLConfig?) {
         // ... (onSurfaceCreated setup remains the same)
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f)
@@ -262,12 +276,13 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         GLES20.glUniformMatrix4fv(viewMatrixHandle, 1, false, viewMatrix, 0)
         GLES20.glUniform1f(timeHandle, time)
 
-        val beaconPosition = MathUtils.gpsToCartesian(MAIN_BEACON_LAT, MAIN_BEACON_LON, EARTH_RADIUS)
+        val cartesianPosition = MathUtils.gpsToCartesian(MAIN_BEACON_LAT, MAIN_BEACON_LON, EARTH_RADIUS, beaconPosition)
         
         // Apply Earth's rotation to beacon position for surface glow
-        val rotatedBeaconPositionVec4 = FloatArray(4)
-        Matrix.multiplyMV(rotatedBeaconPositionVec4, 0, modelMatrix, 0, floatArrayOf(beaconPosition[0], beaconPosition[1], beaconPosition[2], 1f), 0)
-        val rotatedBeaconPosition = floatArrayOf(rotatedBeaconPositionVec4[0], rotatedBeaconPositionVec4[1], rotatedBeaconPositionVec4[2])
+        Matrix.multiplyMV(rotatedBeaconPositionVec4, 0, modelMatrix, 0, floatArrayOf(cartesianPosition[0], cartesianPosition[1], cartesianPosition[2], 1f), 0)
+        rotatedBeaconPosition[0] = rotatedBeaconPositionVec4[0]
+        rotatedBeaconPosition[1] = rotatedBeaconPositionVec4[1]
+        rotatedBeaconPosition[2] = rotatedBeaconPositionVec4[2]
         
         // Pass the already-rotated beacon position to avoid double transformation in shader
         GLES20.glUniform3fv(beaconPositionHandle, 1, rotatedBeaconPosition, 0)
@@ -311,22 +326,27 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
 
     private fun drawBeacon(latitude: Float, longitude: Float, isMainBeacon: Boolean, alpha: Float, pulse: Float) {
         // 1. Get beacon's base position in model space
-        val beaconPosition = MathUtils.gpsToCartesian(latitude, longitude, earthRadius)
+        MathUtils.gpsToCartesian(latitude, longitude, earthRadius, beaconPosition)
 
         // 2. Create the beacon's transformation matrix
-        val beaconModelMatrix = FloatArray(16)
         Matrix.setIdentityM(beaconModelMatrix, 0)
 
         // 3. Orient the beacon to point "up" from the sphere's surface
-        val up = beaconPosition.clone()
+        up[0] = beaconPosition[0]
+        up[1] = beaconPosition[1]
+        up[2] = beaconPosition[2]
         MathUtils.normalize(up)
-        val arbitraryVector = if (up[1] > 0.99f || up[1] < -0.99f) floatArrayOf(1f, 0f, 0f) else floatArrayOf(0f, 1f, 0f)
-        val right = MathUtils.crossProduct(up, arbitraryVector)
+        
+        if (up[1] > 0.99f || up[1] < -0.99f) {
+            arbitraryVector[0] = 1f; arbitraryVector[1] = 0f; arbitraryVector[2] = 0f
+        } else {
+            arbitraryVector[0] = 0f; arbitraryVector[1] = 1f; arbitraryVector[2] = 0f
+        }
+        MathUtils.crossProduct(up, arbitraryVector, right)
         MathUtils.normalize(right)
-        val forward = MathUtils.crossProduct(right, up)
+        MathUtils.crossProduct(right, up, forward)
         MathUtils.normalize(forward)
         
-        val orientationMatrix = FloatArray(16)
         Matrix.setIdentityM(orientationMatrix, 0)
         orientationMatrix[0] = right[0]; orientationMatrix[4] = up[0];    orientationMatrix[8] = forward[0];
         orientationMatrix[1] = right[1]; orientationMatrix[5] = up[1];    orientationMatrix[9] = forward[1];
@@ -337,15 +357,11 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         Matrix.multiplyMM(beaconModelMatrix, 0, beaconModelMatrix, 0, orientationMatrix, 0)
 
         // 5. Apply the same rotation as the Earth
-        val finalBeaconMatrix = FloatArray(16)
         Matrix.multiplyMM(finalBeaconMatrix, 0, modelMatrix, 0, beaconModelMatrix, 0)
 
         // 6. Create MVP matrix and draw
-        val beaconMvpMatrix = FloatArray(16)
         Matrix.multiplyMM(beaconMvpMatrix, 0, viewMatrix, 0, finalBeaconMatrix, 0)
         Matrix.multiplyMM(beaconMvpMatrix, 0, projectionMatrix, 0, beaconMvpMatrix, 0)
-        
-        val lightDirection = floatArrayOf(0.7f, 0.0f, -0.7f)
         
         // Set up additive blending for a glowing effect
         GLES20.glEnable(GLES20.GL_BLEND)
@@ -356,5 +372,11 @@ class EarthRenderer(private val context: Context) : GLESRenderer {
         
         // Restore the original blending mode
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+    }
+
+    override fun release() {
+        GLES20.glDeleteProgram(mProgram)
+        GLES20.glDeleteTextures(2, intArrayOf(textureId, cloudTextureId), 0)
+        beaconRenderer.release()
     }
 }

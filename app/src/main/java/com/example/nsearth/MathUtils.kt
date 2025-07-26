@@ -130,9 +130,10 @@ object MathUtils {
      * @param latitude Latitude in degrees (-90 to 90)
      * @param longitude Longitude in degrees (-180 to 180)
      * @param radius The radius of the sphere
-     * @return FloatArray of size 3 with [x, y, z]
+     * @param result FloatArray of size 3 to store the [x, y, z] result
+     * @return The result FloatArray
      */
-    fun gpsToCartesian(latitude: Float, longitude: Float, radius: Float): FloatArray {
+    fun gpsToCartesian(latitude: Float, longitude: Float, radius: Float, result: FloatArray): FloatArray {
         // Convert degrees to radians
         val latRad = toRadians(latitude)
         val lonRad = toRadians(longitude)
@@ -147,22 +148,21 @@ object MathUtils {
         val phi = lonRad + PI.toFloat()
 
         // Spherical to Cartesian conversion
-        val x = radius * sin(theta) * cos(phi)
-        val y = radius * cos(theta)
-        val z = radius * sin(theta) * sin(phi)
+        result[0] = radius * sin(theta) * cos(phi)
+        result[1] = radius * cos(theta)
+        result[2] = radius * sin(theta) * sin(phi)
         
-        return floatArrayOf(x, y, z)
+        return result
     }
 
     /**
      * Calculates the cross product of two 3D vectors.
+     * @param result FloatArray to store the result
      */
-    fun crossProduct(a: FloatArray, b: FloatArray): FloatArray {
-        return floatArrayOf(
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0]
-        )
+    fun crossProduct(a: FloatArray, b: FloatArray, result: FloatArray) {
+        result[0] = a[1] * b[2] - a[2] * b[1]
+        result[1] = a[2] * b[0] - a[0] * b[2]
+        result[2] = a[0] * b[1] - a[1] * b[0]
     }
 
     /**
